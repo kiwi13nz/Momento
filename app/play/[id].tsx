@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Camera, CheckCircle2, Upload } from 'lucide-react-native';
+import { Camera, CheckCircle2 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 
@@ -106,7 +106,7 @@ export default function PlayerViewScreen() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: 'images',
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.8,
@@ -121,26 +121,27 @@ export default function PlayerViewScreen() {
     setUploading(taskId);
 
     try {
-      // Convert URI to blob
       const response = await fetch(uri);
       const blob = await response.blob();
-      const fileExt = uri.split('.').pop();
+      const fileExt = uri.split('.').pop() || 'jpg';
       const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
       const filePath = `${id}/${playerId}/${fileName}`;
 
-      // Upload to Supabase Storage
+      // Usar el método oficial de Supabase
       const { error: uploadError } = await supabase.storage
         .from('submissions')
-        .upload(filePath, blob);
+        .upload(filePath, blob, {
+          contentType: `image/${fileExt}`,
+          cacheControl: '3600',
+          upsert: false,
+        });
 
       if (uploadError) throw uploadError;
 
-      // Get public URL
       const { data: urlData } = supabase.storage
         .from('submissions')
         .getPublicUrl(filePath);
 
-      // Create submission record
       const { error: dbError } = await supabase.from('submissions').insert({
         task_id: taskId,
         player_id: playerId,
