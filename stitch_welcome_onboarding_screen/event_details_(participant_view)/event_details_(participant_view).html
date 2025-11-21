@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Event Details</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#25d1f4",
+                        "background-light": "#f5f8f8",
+                        "background-dark": "#101f22",
+                    },
+                    fontFamily: {
+                        "display": ["Be Vietnam Pro"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display text-gray-900 dark:text-white">
+<div class="relative min-h-screen pb-32">
+<!-- Top App Bar -->
+<div class="sticky top-0 z-20 flex h-16 items-center bg-background-light/80 px-4 backdrop-blur-sm dark:bg-background-dark/80">
+<button class="flex size-10 shrink-0 items-center justify-center rounded-full">
+<span class="material-symbols-outlined text-gray-900 dark:text-white">arrow_back</span>
+</button>
+<h1 class="w-full truncate text-center text-lg font-bold">Downtown Photo Scavenger Hunt</h1>
+<div class="size-10 shrink-0"></div> <!-- Spacer -->
+</div>
+<!-- Header Image -->
+<div class="@container px-4">
+<div class="w-full bg-center bg-no-repeat bg-cover flex flex-col justify-end overflow-hidden rounded-xl min-h-60" data-alt="Vibrant cityscape at dusk with colorful light trails from traffic" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBTopSC7lVozUa1nUJ5gwqRpLqjheurXHNcV3wn84drv8yowZHrMnIgiNKhTdjHiGoKBO5eDuPNrS07ySEJlHd2xqNvQD5oIDGPYP_1KwE6ozj64Zn1Lau7CN4_UtuxczXtLP3hZupW25C5727t_f0aB7g8vhyxUnr0L7jJdb9JHh1kqAIcnuzqqhdwpGY1yNQKOjzelzNK4oMlC3_J3CtgEWJL7qhJ8qu7pUZ_nD1g3ym-zW2LIp375vUrL-C94gx_MO8fH5Y");'></div>
+</div>
+<!-- Headline & Body Text -->
+<div class="px-4">
+<h1 class="text-gray-900 dark:text-white tracking-tight text-[32px] font-bold leading-tight pt-6 pb-2">Downtown Photo Scavenger Hunt</h1>
+<p class="text-gray-600 dark:text-gray-300 text-base font-normal leading-normal">
+                Join us for a fun-filled day exploring the city's hidden gems and capturing amazing photos. Let's see who has the most creative eye!
+            </p>
+</div>
+<!-- Event Details -->
+<div class="mt-6 grid grid-cols-2 gap-3 px-4">
+<div class="flex items-center gap-3 rounded-lg bg-white/5 p-3 dark:bg-white/5">
+<div class="flex size-10 items-center justify-center rounded-full bg-primary/20 text-primary">
+<span class="material-symbols-outlined">calendar_month</span>
+</div>
+<div>
+<p class="text-sm font-medium text-gray-900 dark:text-white">Oct 26, 2024</p>
+<p class="text-xs text-gray-500 dark:text-gray-400">Saturday</p>
+</div>
+</div>
+<div class="flex items-center gap-3 rounded-lg bg-white/5 p-3 dark:bg-white/5">
+<div class="flex size-10 items-center justify-center rounded-full bg-primary/20 text-primary">
+<span class="material-symbols-outlined">schedule</span>
+</div>
+<div>
+<p class="text-sm font-medium text-gray-900 dark:text-white">2:00 PM</p>
+<p class="text-xs text-gray-500 dark:text-gray-400">Check-in</p>
+</div>
+</div>
+<div class="col-span-2 flex items-center gap-3 rounded-lg bg-white/5 p-3 dark:bg-white/5">
+<div class="flex size-10 items-center justify-center rounded-full bg-primary/20 text-primary">
+<span class="material-symbols-outlined">location_on</span>
+</div>
+<div>
+<p class="text-sm font-medium text-gray-900 dark:text-white">City Hall Park</p>
+<p class="text-xs text-gray-500 dark:text-gray-400">123 Main Street, Downtown</p>
+</div>
+</div>
+</div>
+<!-- Hosted By -->
+<div class="mt-6 px-4">
+<div class="flex items-center justify-between gap-4">
+<div class="flex items-center gap-4">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-12" data-alt="Profile picture of Sarah Lane" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBIV-SaGCADKOPQhmfDuq6jNr2en6rpweRYsmv5qT-_Snv9Nz1_zNLbf6KNxSdbExYWHnkXxkroTRtA0HQGgg6xU0HoLXvaxU212Oa2r7j5BKBbYk__piWraxfTTaiBPVGMLq0a5zkq7UJmmWOGFUG6cpZp8sMKWBccl-95nsfzoML6w_uRncXbmNN3Fz2co5nPw-OJJ6K1JHFL-AbbrTYdURzR9_ceEkMBR4Fr9t3lDT7xRHS1uCR2veezg_USb5BlrkJhq30");'></div>
+<div>
+<p class="text-sm text-gray-500 dark:text-gray-400">Hosted by</p>
+<p class="text-base font-medium text-gray-900 dark:text-white">Sarah Lane</p>
+</div>
+</div>
+<button class="shrink-0 rounded-full bg-primary/20 px-4 py-2 text-sm font-medium text-primary">View Profile</button>
+</div>
+</div>
+<!-- Divider -->
+<hr class="mx-4 my-6 border-gray-200 dark:border-gray-800"/>
+<!-- Photo Tasks Section -->
+<div class="px-4">
+<h2 class="text-xl font-bold text-gray-900 dark:text-white">Your Photo Missions</h2>
+<!-- Progress Bar -->
+<div class="mt-4">
+<div class="flex justify-between text-sm font-medium text-gray-500 dark:text-gray-400">
+<span>Progress</span>
+<span>3 of 10 completed</span>
+</div>
+<div class="mt-1 h-2 w-full rounded-full bg-gray-200 dark:bg-gray-800">
+<div class="h-2 rounded-full bg-primary" style="width: 30%"></div>
+</div>
+</div>
+<!-- Task List -->
+<div class="mt-4 flex flex-col gap-3">
+<!-- Task Item: Completed -->
+<div class="flex items-center gap-4 rounded-lg bg-white/5 p-4 dark:bg-white/5">
+<div class="flex size-12 shrink-0 items-center justify-center rounded-full bg-green-500/20 text-green-400">
+<span class="material-symbols-outlined text-3xl">check_circle</span>
+</div>
+<div class="flex-1">
+<p class="font-medium text-gray-900 dark:text-white">Find a Red Door</p>
+<p class="text-sm text-gray-500 dark:text-gray-400">Status: Completed</p>
+</div>
+<div class="size-12 shrink-0 rounded-md bg-cover bg-center" data-alt="A bright red door with ornate details" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCeIbQazCsndJqKXexap57kywybJC_7gmQPIpuW9BofQB9y_fSNymhvybUkoyrMqTzPU5O-XlKdxDfy9m2G3Ulos1klxiYpvPIzcKYlrtbgnMQla_gYbTxFeMiylQNpvpB0wN2mAVGwlOfcl5FGE2rkjEQQFnuB5tKlFPL5VSAAfRVeYTwADV5MgKp-D7vhTSwi1BH_ZQ0Nb50EVnXfu6UlQGQ-HbvxqVfBcLta0ZzZNrMhV2DRTiHIIY4KfLZuHI2lbqPoqYg')"></div>
+</div>
+<!-- Task Item: To Do -->
+<div class="flex items-center gap-4 rounded-lg bg-white/5 p-4 dark:bg-white/5">
+<div class="flex size-12 shrink-0 items-center justify-center rounded-full bg-gray-200/20 text-gray-400 dark:bg-gray-700/40 dark:text-gray-500">
+<span class="material-symbols-outlined text-3xl">radio_button_unchecked</span>
+</div>
+<div class="flex-1">
+<p class="font-medium text-gray-900 dark:text-white">Creative Street Art</p>
+<p class="text-sm text-gray-500 dark:text-gray-400">Capture a piece of unique graffiti</p>
+</div>
+<span class="material-symbols-outlined text-gray-400">arrow_forward_ios</span>
+</div>
+<!-- Task Item: Pending -->
+<div class="flex items-center gap-4 rounded-lg bg-white/5 p-4 dark:bg-white/5">
+<div class="flex size-12 shrink-0 items-center justify-center rounded-full bg-orange-500/20 text-orange-400">
+<span class="material-symbols-outlined text-3xl">hourglass_top</span>
+</div>
+<div class="flex-1">
+<p class="font-medium text-gray-900 dark:text-white">Reflections in a Puddle</p>
+<p class="text-sm text-gray-500 dark:text-gray-400">Status: Pending Approval</p>
+</div>
+<div class="size-12 shrink-0 rounded-md bg-cover bg-center" data-alt="Reflection of a historic building in a rain puddle on a cobblestone street" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAUj-yx2_hzIlP3-le684Bw0TqIcvi-IjMqfgDleTE8ag4U7xsznrDLWkDa7bsFFto3PWvC7Hmec3PzkeWle6o8Ekc71g4AY75RtRU-xPPoF_IP0d8FYZ31fAFjknxnKGgVkvghICt3upwzSBq4ZRFgcMljggQ-kuEVtitMe0PiYXMV5bquQgJqXP7Xccxg8gMEWnUGtDGdifFqQFMMBf07zVNiUumG8FvawEp3dOF4feQOcLRvIJxaq97F0ljZtTkiiZ-WNtI')"></div>
+</div>
+<!-- More tasks... -->
+<div class="flex items-center gap-4 rounded-lg bg-white/5 p-4 dark:bg-white/5">
+<div class="flex size-12 shrink-0 items-center justify-center rounded-full bg-gray-200/20 text-gray-400 dark:bg-gray-700/40 dark:text-gray-500">
+<span class="material-symbols-outlined text-3xl">radio_button_unchecked</span>
+</div>
+<div class="flex-1">
+<p class="font-medium text-gray-900 dark:text-white">A Four-legged Friend</p>
+<p class="text-sm text-gray-500 dark:text-gray-400">Take a picture of a cute dog</p>
+</div>
+<span class="material-symbols-outlined text-gray-400">arrow_forward_ios</span>
+</div>
+</div>
+</div>
+<!-- Sticky Footer Action Bar -->
+<div class="fixed bottom-0 left-0 right-0 z-20 bg-background-light/80 p-4 backdrop-blur-sm dark:bg-background-dark/80">
+<div class="flex gap-3">
+<button class="w-full rounded-full bg-gray-200 py-4 text-base font-bold text-gray-800 dark:bg-gray-800 dark:text-gray-200">Decline</button>
+<button class="w-full rounded-full bg-primary py-4 text-base font-bold text-black">Accept Invitation</button>
+</div>
+</div>
+</div>
+</body></html>

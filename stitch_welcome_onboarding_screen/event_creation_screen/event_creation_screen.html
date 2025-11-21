@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Create New Event</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings:
+        'FILL' 0,
+        'wght' 400,
+        'GRAD' 0,
+        'opsz' 24
+      }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#25d1f4",
+              "background-light": "#f5f8f8",
+              "background-dark": "#101f22",
+            },
+            fontFamily: {
+              "display": ["Be Vietnam Pro", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display">
+<div class="relative flex min-h-screen w-full flex-col">
+<!-- Top App Bar -->
+<header class="sticky top-0 z-10 flex items-center justify-between bg-background-light/80 px-4 py-3 backdrop-blur-sm dark:bg-background-dark/80">
+<button class="flex size-10 items-center justify-center text-slate-800 dark:text-white">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<h1 class="flex-1 text-center text-lg font-bold text-slate-900 dark:text-white">Create New Event</h1>
+<div class="size-10"></div>
+</header>
+<main class="flex-1 px-4 pb-32">
+<!-- Section 1: Event Details -->
+<section class="mt-4">
+<h2 class="text-[22px] font-bold tracking-tight text-slate-900 dark:text-white">Event Details</h2>
+<div class="mt-4 space-y-4">
+<label class="flex flex-col">
+<p class="pb-2 text-base font-medium text-slate-700 dark:text-slate-300">Event Name</p>
+<input class="form-input flex h-14 w-full min-w-0 flex-1 resize-none overflow-hidden rounded border border-slate-300 bg-white p-[15px] text-base font-normal leading-normal text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-0 focus:ring-2 focus:ring-primary/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500 dark:focus:border-primary" placeholder="e.g., Summer Photo Scavenger Hunt" value=""/>
+</label>
+<div class="flex flex-wrap items-end gap-4">
+<label class="flex min-w-40 flex-1 flex-col">
+<p class="pb-2 text-base font-medium text-slate-700 dark:text-slate-300">Start Date</p>
+<input class="form-input flex h-14 w-full min-w-0 flex-1 resize-none overflow-hidden rounded border border-slate-300 bg-white p-[15px] text-base font-normal leading-normal text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-0 focus:ring-2 focus:ring-primary/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500 dark:focus:border-primary" placeholder="Select date" type="date" value=""/>
+</label>
+<label class="flex min-w-40 flex-1 flex-col">
+<p class="pb-2 text-base font-medium text-slate-700 dark:text-slate-300">End Date</p>
+<input class="form-input flex h-14 w-full min-w-0 flex-1 resize-none overflow-hidden rounded border border-slate-300 bg-white p-[15px] text-base font-normal leading-normal text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-0 focus:ring-2 focus:ring-primary/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500 dark:focus:border-primary" placeholder="Select date" type="date" value=""/>
+</label>
+</div>
+<label class="flex flex-col">
+<p class="pb-2 text-base font-medium text-slate-700 dark:text-slate-300">Location (Optional)</p>
+<input class="form-input flex h-14 w-full min-w-0 flex-1 resize-none overflow-hidden rounded border border-slate-300 bg-white p-[15px] text-base font-normal leading-normal text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-0 focus:ring-2 focus:ring-primary/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500 dark:focus:border-primary" placeholder="e.g., Central Park, NYC" value=""/>
+</label>
+<label class="flex flex-col">
+<p class="pb-2 text-base font-medium text-slate-700 dark:text-slate-300">Event Description</p>
+<textarea class="form-textarea w-full min-w-0 flex-1 resize-y overflow-hidden rounded border border-slate-300 bg-white p-4 text-base font-normal leading-normal text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-0 focus:ring-2 focus:ring-primary/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500 dark:focus:border-primary" placeholder="Tell your friends a little about the event..." rows="4"></textarea>
+</label>
+</div>
+</section>
+<!-- Section 2: Photo Tasks -->
+<section class="mt-8">
+<h2 class="text-[22px] font-bold tracking-tight text-slate-900 dark:text-white">Photo Challenges</h2>
+<div class="mt-4 space-y-4">
+<!-- Photo Task Card -->
+<div class="flex items-start gap-3 rounded-lg bg-white p-4 shadow-sm dark:bg-slate-800">
+<label class="flex-1">
+<p class="pb-2 text-sm font-medium text-slate-600 dark:text-slate-400">Challenge #1</p>
+<input class="form-input w-full border-0 bg-transparent p-0 text-base text-slate-900 placeholder:text-slate-400 focus:ring-0 dark:text-white dark:placeholder:text-slate-500" placeholder="Describe the photo challenge..." value="Take a photo of something blue"/>
+</label>
+<button class="mt-6 flex size-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-red-500 dark:text-slate-400 dark:hover:bg-slate-700">
+<span class="material-symbols-outlined text-xl">delete</span>
+</button>
+</div>
+<!-- Photo Task Card -->
+<div class="flex items-start gap-3 rounded-lg bg-white p-4 shadow-sm dark:bg-slate-800">
+<label class="flex-1">
+<p class="pb-2 text-sm font-medium text-slate-600 dark:text-slate-400">Challenge #2</p>
+<input class="form-input w-full border-0 bg-transparent p-0 text-base text-slate-900 placeholder:text-slate-400 focus:ring-0 dark:text-white dark:placeholder:text-slate-500" placeholder="Describe the photo challenge..." value=""/>
+</label>
+<button class="mt-6 flex size-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-red-500 dark:text-slate-400 dark:hover:bg-slate-700">
+<span class="material-symbols-outlined text-xl">delete</span>
+</button>
+</div>
+<button class="flex w-full items-center justify-center gap-2 rounded-lg bg-primary/20 py-3 text-base font-bold text-primary transition-colors hover:bg-primary/30">
+<span class="material-symbols-outlined">add_circle</span>
+<span>Add Another Task</span>
+</button>
+</div>
+</section>
+<!-- Section 3: Invite Participants -->
+<section class="mt-8">
+<h2 class="text-[22px] font-bold tracking-tight text-slate-900 dark:text-white">Invite Your Crew</h2>
+<p class="mt-1 text-slate-600 dark:text-slate-400">Invite friends to join the fun!</p>
+<div class="mt-4">
+<div class="flex flex-wrap items-center gap-3">
+<div class="flex items-center gap-2 rounded-full bg-white p-1 pr-3 dark:bg-slate-800">
+<img class="size-8 rounded-full" data-alt="Profile picture of a man with glasses and a beard" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAlF3mXQqEVJq5hk_DSofzcE08Ej-2XtyH32BnvC74grSbobCtVE8o3ATa3n0lBfQ5Zp3uojSQSaiUZNhYA5kLAhJIEqL2BGVftJswh_c3HZhmugHa6i1AIk1H3weeKtgExSNlHE7X_xcPsa8tcS3RvAlH7dH7hd5-FACqfSr6tnS5PW-TKz9KkROwCYrT2XkMUI6HkKAdgzhZCyccT8-3mibRNRvkJ6IugGzf5SOGX9tYIDJmHZdbhF1Oy-bY2gGpRDaVRnAY"/>
+<span class="text-sm font-medium text-slate-700 dark:text-slate-300">Alex Johnson</span>
+</div>
+<div class="flex items-center gap-2 rounded-full bg-white p-1 pr-3 dark:bg-slate-800">
+<img class="size-8 rounded-full" data-alt="Profile picture of a smiling woman with curly hair" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB93qDDtsgXMzM8yk_4zLVlrYaZXQaKdDbm0t19gjEyH68MRa5covvNlHUANetSlaySnMBaFO_1Lvzjq4cdfbiLSJ9mHang123nAzNQHl-BwmuPd68IT7vG1lvjFA-JhDBtUQM5ko3ace-ECGT4ru1xdjO8Lhzr4yWffQ-KfjG688Y4waWoJS-rauUEcXuNmbd0XjRuAFiRMcnXyEDLA-AxkXYBkZaok9qSOTD7nsH9F242eHXs89eKW-6-bx6jp1mOB96G560"/>
+<span class="text-sm font-medium text-slate-700 dark:text-slate-300">Maria Garcia</span>
+</div>
+<div class="flex items-center gap-2 rounded-full bg-white p-1 pr-3 dark:bg-slate-800">
+<img class="size-8 rounded-full" data-alt="Profile picture of a smiling woman with blonde hair" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQpaSLqUBgQuKEsufDcFnQCjJUH9JmNBugqOvzOpL7vPW_kyOqBcYgUigOogxtfmATUjZDR1QqNMib5daumr3rOiiNbzB2YrZkCsGxn2gZb0trPVSUZuWjjJrJJ3THOu7QkMy3NpS-S8y4rV2eM9VLMwvLPRvQoRCLXRCpKxb6mYg8xmV9_xmYdARlTvwI06Cx2px73upfc8XMWmTrl4hTCNtUTS41vf4wspiQUlFa7hQlN_lOKnE_o8MjUZQhYfKb0gPwm9k"/>
+<span class="text-sm font-medium text-slate-700 dark:text-slate-300">Sophie Chen</span>
+</div>
+<button class="flex size-10 items-center justify-center rounded-full border-2 border-dashed border-primary/50 bg-primary/20 text-primary transition-colors hover:bg-primary/30">
+<span class="material-symbols-outlined">person_add</span>
+</button>
+</div>
+</div>
+</section>
+</main>
+<!-- Sticky Footer CTA -->
+<footer class="fixed bottom-0 left-0 right-0 z-10 bg-background-light/80 p-4 backdrop-blur-sm dark:bg-background-dark/80">
+<button class="w-full rounded bg-primary py-4 text-lg font-bold text-slate-900 transition-transform hover:scale-[1.02] active:scale-[0.98]">
+                Create Event &amp; Send Invites
+            </button>
+</footer>
+</div>
+</body></html>

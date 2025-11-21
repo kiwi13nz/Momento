@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Welcome to the Event App</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#25d1f4",
+                        "background-light": "#f5f8f8",
+                        "background-dark": "#101f22",
+                    },
+                    fontFamily: {
+                        "display": ["Be Vietnam Pro", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display">
+<div class="relative flex min-h-screen w-full flex-col">
+<header class="absolute top-0 right-0 p-4">
+<button class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-5 bg-background-light/20 dark:bg-background-dark/20 text-white text-base font-bold leading-normal tracking-[0.015em]">
+<span class="truncate">Skip</span>
+</button>
+</header>
+<main class="flex-grow flex flex-col">
+<!-- HeaderImage -->
+<div class="@container flex-shrink-0">
+<div class="@[480px]:px-4 @[480px]:py-3">
+<div class="bg-cover bg-center flex flex-col justify-end overflow-hidden bg-[#111718] @[480px]:rounded-xl min-h-80" data-alt="People celebrating at an event with confetti in the air." style='background-image: linear-gradient(0deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0) 25%), url("https://lh3.googleusercontent.com/aida-public/AB6AXuDskIO8ySztRpd64XhTwgWwtUX1Rf1mVQYwyGU8eYtLU-Gjp_ga3CGS4k-yfwHCCUHLHlLOrH_AeXCCsk314QJU58MKbkc1kM8v2k_v2N2ZXIj1NpnKPj_M7elOp6--ves3H2uOkYgmhnDXjtlBNQwwFdLq3OYRU6-3ymEs6Tk7l6MxqrWCDwSV6orvMZB1m-HK1tPTQTvfBKcbtp_cy0-UhzWKq5M6zHoh5hDvdHtvs8GTzmWfCoK-wKntUW-vEg0ZHqDva9I");'>
+</div>
+</div>
+</div>
+<!-- Onboarding Content -->
+<div class="flex-grow flex flex-col items-center justify-between p-4">
+<div class="w-full text-center">
+<!-- HeadlineText -->
+<h1 class="text-gray-900 dark:text-white tracking-tight text-[32px] font-bold leading-tight pt-6 pb-3">Host Unforgettable Events</h1>
+<!-- BodyText -->
+<p class="text-gray-600 dark:text-gray-300 text-base font-normal leading-normal pb-3 pt-1 px-4">
+                        Create your own events, like birthdays, team outings, or city explorations for your friends to join.
+                    </p>
+</div>
+<!-- PageIndicators -->
+<div class="flex w-full flex-row items-center justify-center gap-3 py-5">
+<div class="h-2 w-2 rounded-full bg-primary"></div>
+<div class="h-2 w-2 rounded-full bg-gray-300 dark:bg-gray-700"></div>
+<div class="h-2 w-2 rounded-full bg-gray-300 dark:bg-gray-700"></div>
+</div>
+</div>
+</main>
+<footer class="p-4 space-y-3">
+<!-- SingleButton for Primary CTA -->
+<div class="flex">
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-12 px-5 flex-1 bg-primary text-background-dark text-base font-bold leading-normal tracking-[0.015em]">
+<span class="truncate">Create an Account</span>
+</button>
+</div>
+<!-- Secondary CTA -->
+<div class="flex justify-center">
+<button class="flex cursor-pointer items-center justify-center rounded-full h-12 px-5 text-gray-600 dark:text-gray-300 text-base font-bold leading-normal tracking-[0.015em] hover:bg-primary/20">
+<span class="truncate">Log In</span>
+</button>
+</div>
+</footer>
+</div>
+</body></html>

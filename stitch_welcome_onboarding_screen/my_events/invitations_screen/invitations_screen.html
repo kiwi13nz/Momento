@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>My Events</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings:
+            'FILL' 0,
+            'wght' 400,
+            'GRAD' 0,
+            'opsz' 24;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#007AFF",
+                        "background-light": "#F8F9FA",
+                        "background-dark": "#111718",
+                    },
+                    fontFamily: {
+                        "display": ["Be Vietnam Pro", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "1rem",
+                        "lg": "1.5rem",
+                        "xl": "2rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-display">
+<div class="relative flex min-h-screen w-full flex-col bg-background-light dark:bg-background-dark group/design-root overflow-x-hidden">
+<!-- Top App Bar -->
+<div class="sticky top-0 z-10 flex flex-col bg-background-light dark:bg-background-dark">
+<div class="flex items-center p-4 pb-2 justify-between">
+<div class="flex size-12 shrink-0 items-center text-zinc-900 dark:text-white">
+<span class="material-symbols-outlined text-3xl">menu</span>
+</div>
+<h2 class="text-zinc-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center">My Events</h2>
+<div class="flex w-12 items-center justify-end">
+<button class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-12 bg-transparent text-zinc-900 dark:text-white gap-2 text-base font-bold leading-normal tracking-[0.015em] min-w-0 p-0">
+<span class="material-symbols-outlined text-2xl">search</span>
+</button>
+</div>
+</div>
+<!-- Tabs -->
+<div class="px-4">
+<div class="flex border-b border-zinc-200 dark:border-zinc-700 justify-between">
+<a class="flex flex-col items-center justify-center border-b-[3px] border-b-primary pb-3 pt-4 flex-1" href="#">
+<p class="text-primary text-sm font-bold leading-normal tracking-[0.015em]">My Events</p>
+</a>
+<a class="relative flex flex-col items-center justify-center border-b-[3px] border-b-transparent text-zinc-500 dark:text-zinc-400 pb-3 pt-4 flex-1" href="#">
+<p class="text-sm font-bold leading-normal tracking-[0.015em]">Invitations</p>
+<span class="absolute top-3 right-[25%] flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+</span>
+</a>
+</div>
+</div>
+</div>
+<!-- Main Content -->
+<main class="flex-1 px-4 pt-4 pb-24">
+<!-- Event Card 1 -->
+<div class="mb-4">
+<div class="bg-cover bg-center flex flex-col items-stretch justify-end rounded-lg pt-[132px]" data-alt="People celebrating at an outdoor summer festival during the day" style='background-image: linear-gradient(0deg, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0) 100%), url("https://lh3.googleusercontent.com/aida-public/AB6AXuCFucEJ0in2f7_FVhwkv5UEfhkLIHdNL28bRYcGCousgw0y2VlOgLcdYjo4Vv3bay8t8my0eBIB0nm8WJNJzBCeV-jfIdCrM8Jnk3lGCZ3Jtly9Idyie7FgyNYHvY132uw9dQzkfNc3tA0AlUjwEnOSyrGbyPTFO1WW3AKsICV74BX-dclhqCey6yee7idv2KP4qcpraW4QkSUHxQmfBgGN_CwI9JprTM_YsNHR6_JWyWVHiMKGOLmTJ06DRM9g5eT0V3NnntA");'>
+<div class="flex w-full items-end justify-between gap-4 p-4">
+<div class="flex max-w-[440px] flex-1 flex-col gap-1">
+<p class="text-sm font-semibold leading-normal text-emerald-400">Live</p>
+<p class="text-white tracking-light text-2xl font-bold leading-tight max-w-[440px]">Summer Photo Scavenger Hunt</p>
+<p class="text-zinc-200 dark:text-zinc-300 text-base font-medium leading-normal">Sat, Aug 24 - 2:00 PM</p>
+</div>
+</div>
+</div>
+<div class="flex items-center px-2 py-2 justify-start bg-zinc-100 dark:bg-zinc-800/50 rounded-b-lg -mt-1">
+<div class="flex -space-x-2 overflow-hidden">
+<img class="inline-block size-9 rounded-full ring-2 ring-zinc-100 dark:ring-zinc-800/50" data-alt="Profile picture of a man with glasses" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCFO95tuPc7KI6yDpk24wOrrIOve9Bu6cFB10U465XlQDhugVYnBcJ58KiUoSp7uvtWnCFT9EXk8zYre6bl2R-iNjR8eDqHR5LBVKGFHXufu9OBelvCo-ASXfJODpy0J_P8z8rnAC8CFes_KmFc3tCO14Vpx2or3cqriknCNXaL29S7gnrr3xb6DrLCTwXvH668lt_nqfI4h2C_ZcBmuq2_TV8jAiyxoaf7-u5IJgofza7oXewwja84J4T8_QL9zsXpw3XegOg"/>
+<img class="inline-block size-9 rounded-full ring-2 ring-zinc-100 dark:ring-zinc-800/50" data-alt="Profile picture of a woman smiling" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAYBUq1JAx3Te6SL5kgXJg8gF7eodvWXAVmDmmh5Y-5xe5WXLJHoLuTTjZatA6y77Y9B0O816BJA4D2fX2XQkKGTY-TGpz-Tpzs4mtjj0_o3Krv9OsHTurQ-_pnya8lQad8FFZOz25WfeIMeIHpvh_yG60tHk49O5ddaH57x1bWcFondATILCxzZ3ohi1TYHCzns7V2H0tknrj_LMAMBcbg9WKOKqGYE2KdaSGvrkdn9Rglb5zE56WjzrXLqhKXlWcZjte92bo"/>
+<img class="inline-block size-9 rounded-full ring-2 ring-zinc-100 dark:ring-zinc-800/50" data-alt="Profile picture of a man with a beard" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB1-dV-TI4YLyGYnP_s1ilaDbUh8wzsvfP9l3NlopKq5RqFg25w9rmKe372X8FBF4sXPYj7dHgTXx04M7IAvkXtmVtOyzjSkFNmlROco_imcvENOCq684SzIPpWpsgG6Dx78jK-M9CBCnbnkSxbTg1alt_gAPqeazbxOFKINy_u4CQqQ1h2ONajGie2hmakMTHAUjp19YJrEZE9QzJOa8bKYpNvkc3tup1Rkvr1qHfvR9-f0QBHm5143iQ3l8FnnT4HXgNidOQ"/>
+</div>
+<p class="ml-3 text-sm font-medium text-zinc-600 dark:text-zinc-400">12 participants</p>
+</div>
+</div>
+<!-- Event Card 2 -->
+<div class="mb-4">
+<div class="bg-cover bg-center flex flex-col items-stretch justify-end rounded-lg pt-[132px]" data-alt="A futuristic city skyline at night with neon lights" style='background-image: linear-gradient(0deg, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0) 100%), url("https://lh3.googleusercontent.com/aida-public/AB6AXuCUOo3pEptcapex1kYfb_ou3e8g19tOLe-Xn6Djq1kleg1myzZQknE2UY8Bz1cP64Br3bo7DB5I6AJ3dYkb9R_JqVBlTulaxeIvI9hgEOz9SNh2V6V16p3kVvjpfyOCXqN8IrPK7JUfKLJsG7xV2kWybBRPnc3MLR2OLDoD8wHIpdXGc2VXnq3Z2VureDKu5ZHh2QIoZuonjxXJ0nsZqIeDdCD7RdG53fQMchqwgelUYEsHRuvg0XCE_SSrF4suHC3VYev36G8");'>
+<div class="flex w-full items-end justify-between gap-4 p-4">
+<div class="flex max-w-[440px] flex-1 flex-col gap-1">
+<p class="text-sm font-semibold leading-normal text-orange-400">Upcoming</p>
+<p class="text-white tracking-light text-2xl font-bold leading-tight max-w-[440px]">City at Night Challenge</p>
+<p class="text-zinc-200 dark:text-zinc-300 text-base font-medium leading-normal">Fri, Sep 6 - 8:00 PM</p>
+</div>
+</div>
+</div>
+<div class="flex items-center px-2 py-2 justify-start bg-zinc-100 dark:bg-zinc-800/50 rounded-b-lg -mt-1">
+<div class="flex -space-x-2 overflow-hidden">
+<img class="inline-block size-9 rounded-full ring-2 ring-zinc-100 dark:ring-zinc-800/50" data-alt="Profile picture of a man in a suit" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA0xYPSUgu33yF3W8sxFIrEft7nNbiocpJpPoMKaFUz4UYlI2yMdg5U7z90gKw4Kyyc8IbO49Cq5nwfWuVt0uQBAiNijMrg-vLiwPuCWGof6NcgkHFYfu2cUj5uht4h694UJqLnMV4PpJKGdTFsXXnVxeGnC7f-TUF0cHSb58-_Mx7XCm6r0A8oVcu-aVpDcHBtdB-NT1IH4ria_YwhpvKkdWlW66dkvemEvyfnI_-7T8kcxSryyjkMuPeept98HCKQsHpwJ8E"/>
+<img class="inline-block size-9 rounded-full ring-2 ring-zinc-100 dark:ring-zinc-800/50" data-alt="Profile picture of a woman with curly hair" src="https://lh3.googleusercontent.com/aida-public/AB6AXuClv_t32gXCFIEEGe6BhnM5BqdwkIB2lvpmu0CzXtNVx020av-NVq_jAFo7IMmEdN9vr4gxHga34JmOxC3hos2kqy76vNnXUMOdj4r9RyEMAU8GzLs5y4_XJxukYxg-BkmSoiA1O0HUPm8nQwuvTN8PjF2c5hIKYY3CE2GiudQRMW76J8Pw3aCd7JQRXjYuC2D4LMsPcyoVZn9_U1-rn_7sIs9U0hMpkHFsFxrUIkWGZn_z5qBn7x2lqycWuFFjQaJ_ZH09vSs"/>
+</div>
+<p class="ml-3 text-sm font-medium text-zinc-600 dark:text-zinc-400">5 participants</p>
+</div>
+</div>
+<!-- Event Card 3 -->
+<div class="mb-4">
+<div class="bg-cover bg-center flex flex-col items-stretch justify-end rounded-lg pt-[132px]" data-alt="A finished board game on a wooden table" style='background-image: linear-gradient(0deg, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0) 100%), url("https://lh3.googleusercontent.com/aida-public/AB6AXuAQDmr1BBgRk6dlf4Jj6GYzTBvxN12i0mtv2ufYftvemIIq3T4vCWO-YhJaJacMK5B2w_qGF6e7VoqyY0eQ83m9jcKUW3l_SnEQX9-wMrxjEhCBusae-0oahC3ECdUFqPVN-MPm3eLo3hjtXdn0k0pmBAxWfOnLsb0e58vPfNFJjLxR6K22xOzmq4wo1QN-Yf8mrb7scA-BGNn4DfTdXGqcNHI4jtPnviPamVdpuc9tLv-AH9I4CnB-2tVjjVTwKGyabMuUf70");'>
+<div class="flex w-full items-end justify-between gap-4 p-4">
+<div class="flex max-w-[440px] flex-1 flex-col gap-1">
+<p class="text-sm font-semibold leading-normal text-zinc-400 dark:text-zinc-500">Ended</p>
+<p class="text-white tracking-light text-2xl font-bold leading-tight max-w-[440px]">Board Game Night</p>
+<p class="text-zinc-200 dark:text-zinc-300 text-base font-medium leading-normal">Tue, Jul 30 - 6:00 PM</p>
+</div>
+</div>
+</div>
+<div class="flex items-center px-2 py-2 justify-start bg-zinc-100 dark:bg-zinc-800/50 rounded-b-lg -mt-1">
+<div class="flex -space-x-2 overflow-hidden">
+<img class="inline-block size-9 rounded-full ring-2 ring-zinc-100 dark:ring-zinc-800/50" data-alt="Profile picture of a woman smiling" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAPDKCn-ul9PABUsrjN-de429Th_zXUUBqEOS9E-WCWVTomYXANbaq-atabxRaJfBoVwN9TyOJOC4jL3lPy4sAE6SQXRE4XVKcotR6HY9uEO2cyNo2ZE0RNhq2EAjwAsTcotbwpRKPyeEdP7i7zK8HSHAuGRREy4Am1oXyCruK477I6rL8fLPWWaojzc4JKAiR1R7EJWej4RgkUv60JuRIPYX5oX7DYDt9KRUjdqf4PnVT2j4wdI12pJasvb9L1mYWHaG8WOxg"/>
+<img class="inline-block size-9 rounded-full ring-2 ring-zinc-100 dark:ring-zinc-800/50" data-alt="Profile picture of a man with glasses" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAVDYfzu0vjVsmdWc_6Cw-EG5oFnI5t6kOXfcszq399gd9clO8AQVkhX7xo3Dkby0q8r73VDJcBBLCLwxk5GdGbCvCeDQOCS8ZIX26WUVE_dtEmO-i0ql7B8LjzaFQTG8qHqi6TxpmhyNwdwsQgMPYRe0mUJyAWx8wZ1sCNMRToTw3cSgyAjoitn4dui52FkCqI-FxDmbGxUMvGF6XPmlXZEICm4Ak-Rr7PIU0DRTE8WWDbmRkUrjnZPegiVaLQF3Ze9kFVJR0"/>
+<img class="inline-block size-9 rounded-full ring-2 ring-zinc-100 dark:ring-zinc-800/50" data-alt="Profile picture of a man in a suit" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDUqtaFZxZcB5ooiAK9aegLINet_2-M3FiI4wvft-t_xgglTVGcE_XxyoUvdBKoRd3kdI41nFIp39hV4q6f7B795lA2yus7BHN6oA05uP3UsvjCVn7_TotjVOD_pDfWIfIRHIcs_8xpHGgUwu7qMZUNCl1aTmWWBv4yLNwtC4NGYjhmiNhY5O83d1QWtIrUhUonp9lmYvdBs02_NLwzHwbMHc85GCD5o3KAtJPBULzpmnU7CxZ7BXMh0dGmaG9hek7uT0ZW0Zg"/>
+<img class="inline-block size-9 rounded-full ring-2 ring-zinc-100 dark:ring-zinc-800/50" data-alt="Profile picture of a woman with curly hair" src="https://lh3.googleusercontent.com/aida-public/AB6AXuApgkohBwlUs0911SFkIP64l_7Ek_jIZMKF4u2umn8bDA0Qf7wBAS1UQgvx2hDPfGoXHeYgK5x4hGMt3ftG8sJWgb-swG_LxLBtyqjVhvTZVFCBkzP_mOxdB1Y6gudcxLcNphFXZozJSiq3G-O0OFEsLWbH1TGUteecmibTMNPZ13bEEBNmVld0fuTX6do0tnQy0XuxOudlGTOIffjMfLuiMEko15prLE3cFaiZXGg7wT8pa5PyKCuvFonU8GLdMjk15Yh73SI"/>
+</div>
+<p class="ml-3 text-sm font-medium text-zinc-600 dark:text-zinc-400">8 participants</p>
+</div>
+</div>
+</main>
+<!-- Floating Action Button -->
+<div class="absolute bottom-6 right-6">
+<button class="flex h-16 w-16 items-center justify-center rounded-full bg-primary text-white shadow-lg transition-transform duration-200 ease-in-out hover:scale-105 active:scale-95">
+<span class="material-symbols-outlined text-4xl" style="font-variation-settings: 'wght' 300;">add</span>
+</button>
+</div>
+</div>
+</body></html>

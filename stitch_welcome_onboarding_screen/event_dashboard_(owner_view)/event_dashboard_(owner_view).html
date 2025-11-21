@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>My Events Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings:
+            'FILL' 0,
+            'wght' 400,
+            'GRAD' 0,
+            'opsz' 24;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#25d1f4",
+                        "background-light": "#f5f8f8",
+                        "background-dark": "#101f22",
+                    },
+                    fontFamily: {
+                        "display": ["Be Vietnam Pro", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display">
+<div class="relative flex h-auto min-h-screen w-full flex-col">
+<!-- Top App Bar -->
+<header class="sticky top-0 z-10 flex items-center bg-background-light/80 dark:bg-background-dark/80 p-4 pb-2 backdrop-blur-sm justify-between">
+<div class="flex size-12 shrink-0 items-center justify-start">
+<span class="material-symbols-outlined text-gray-800 dark:text-white text-3xl">widgets</span>
+</div>
+<h1 class="text-gray-900 dark:text-white text-xl font-bold leading-tight tracking-tight flex-1 text-center">My Events</h1>
+<div class="flex w-12 items-center justify-end">
+<button class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-12 bg-transparent text-gray-800 dark:text-white gap-2 text-base font-bold leading-normal tracking-[0.015em] min-w-0 p-0">
+<span class="material-symbols-outlined text-3xl">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Segmented Buttons -->
+<div class="px-4 py-3">
+<div class="flex h-10 flex-1 items-center justify-center rounded-full bg-gray-200 dark:bg-black/20 p-1">
+<label class="flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded-full px-2 has-[:checked]:bg-primary has-[:checked]:text-white text-gray-500 dark:text-gray-400 has-[:checked]:dark:text-background-dark text-sm font-medium leading-normal transition-colors duration-200 ease-in-out">
+<span class="truncate">Active</span>
+<input checked="" class="invisible w-0" name="event-filter" type="radio" value="Active"/>
+</label>
+<label class="flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded-full px-2 has-[:checked]:bg-primary has-[:checked]:text-white text-gray-500 dark:text-gray-400 has-[:checked]:dark:text-background-dark text-sm font-medium leading-normal transition-colors duration-200 ease-in-out">
+<span class="truncate">Upcoming</span>
+<input class="invisible w-0" name="event-filter" type="radio" value="Upcoming"/>
+</label>
+<label class="flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded-full px-2 has-[:checked]:bg-primary has-[:checked]:text-white text-gray-500 dark:text-gray-400 has-[:checked]:dark:text-background-dark text-sm font-medium leading-normal transition-colors duration-200 ease-in-out">
+<span class="truncate">Past</span>
+<input class="invisible w-0" name="event-filter" type="radio" value="Past"/>
+</label>
+</div>
+</div>
+<main class="flex-grow px-4 pb-24">
+<!-- Event Card 1 -->
+<div class="mb-4 @container">
+<div class="flex cursor-pointer flex-col items-stretch justify-start rounded-lg bg-white dark:bg-white/5 shadow-sm transition-shadow hover:shadow-md">
+<div class="w-full bg-center bg-no-repeat aspect-video bg-cover rounded-t-lg" data-alt="Vibrant abstract cityscape illustration for a scavenger hunt" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBwr1KSPYMpTJpH-TB9aju6YAggSq4soOzsT_55XUMarVWZYS5nW4zHjwmn_MhCYtUfxYQDpJdUYGcVhsgpeQde0b_Nvyi_m4g6TX48_bwaDdQ18BUTfQVLG5tf6XIWdym2Euhnl-pcc4tSSQISeIns3uf4lihhLUOYioceMddrWEeptQbdwsNG_kPHbvFilQO6rztVlroCtWPNULHo-GIYB1HoqRMQA65o-C0uE3ivXqUCUDRk9hVV_M291dO-cNKpTTDLQ14");'></div>
+<div class="flex w-full min-w-72 grow flex-col items-stretch justify-center gap-4 p-4">
+<div>
+<p class="text-gray-900 dark:text-white text-lg font-bold leading-tight">Sarah's Birthday Scavenger Hunt</p>
+<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal mt-1">December 24th, 2024</p>
+</div>
+<div class="flex flex-col gap-3">
+<div class="flex items-center gap-6 justify-between">
+<p class="text-gray-800 dark:text-gray-300 text-sm font-medium leading-normal flex items-center gap-2"><span class="material-symbols-outlined text-base">group</span> Participants</p>
+<p class="text-gray-600 dark:text-gray-400 text-sm font-normal leading-normal">12/20 Joined</p>
+</div>
+<div class="h-1 rounded-full bg-gray-200 dark:bg-black/20">
+<div class="h-1 rounded-full bg-primary" style="width: 60%;"></div>
+</div>
+</div>
+<div class="flex flex-col gap-3">
+<div class="flex items-center gap-6 justify-between">
+<p class="text-gray-800 dark:text-gray-300 text-sm font-medium leading-normal flex items-center gap-2"><span class="material-symbols-outlined text-base">check_circle</span> Task Completion</p>
+<p class="text-gray-600 dark:text-gray-400 text-sm font-normal leading-normal">150/200 Photos</p>
+</div>
+<div class="h-1 rounded-full bg-gray-200 dark:bg-black/20">
+<div class="h-1 rounded-full bg-primary" style="width: 75%;"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Event Card 2 -->
+<div class="mb-4 @container">
+<div class="flex cursor-pointer flex-col items-stretch justify-start rounded-lg bg-white dark:bg-white/5 shadow-sm transition-shadow hover:shadow-md">
+<div class="w-full bg-center bg-no-repeat aspect-video bg-cover rounded-t-lg" data-alt="Stylish photo of a city street at dusk for a photo walk event" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAQ05Z6arOE_7f1DJHtvXAWDy7Pf_aC26K4wpeBDc_Zm-2eGS8vUd621WMyACjguvc18N9uRvRrymL-yx83N9a3iY_P1DzLDCRgpjOAgDHpOXINSKgUwka-EZHl8SAEz1ExSLzYmGk0iAhPssZhonLbEnPCbZ1SDGVVaCTwZA-pFfOIe9TjL1fWQyqoeMiOhrH4ZUhzkCHDPF2rAHxlPp2curxtXH0g038VfvPcSjW3v8g8yi0qsAhfFrBDB6oVSxNugQVMC5Y");'></div>
+<div class="flex w-full min-w-72 grow flex-col items-stretch justify-center gap-4 p-4">
+<div>
+<p class="text-gray-900 dark:text-white text-lg font-bold leading-tight">Downtown Photo Walk</p>
+<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal mt-1">December 28th, 2024</p>
+</div>
+<div class="flex flex-col gap-3">
+<div class="flex items-center gap-6 justify-between">
+<p class="text-gray-800 dark:text-gray-300 text-sm font-medium leading-normal flex items-center gap-2"><span class="material-symbols-outlined text-base">group</span> Participants</p>
+<p class="text-gray-600 dark:text-gray-400 text-sm font-normal leading-normal">8/15 Joined</p>
+</div>
+<div class="h-1 rounded-full bg-gray-200 dark:bg-black/20">
+<div class="h-1 rounded-full bg-primary" style="width: 53.3%;"></div>
+</div>
+</div>
+<div class="flex flex-col gap-3">
+<div class="flex items-center gap-6 justify-between">
+<p class="text-gray-800 dark:text-gray-300 text-sm font-medium leading-normal flex items-center gap-2"><span class="material-symbols-outlined text-base">check_circle</span> Task Completion</p>
+<p class="text-gray-600 dark:text-gray-400 text-sm font-normal leading-normal">45/100 Photos</p>
+</div>
+<div class="h-1 rounded-full bg-gray-200 dark:bg-black/20">
+<div class="h-1 rounded-full bg-primary" style="width: 45%;"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Empty State Example (hidden by default, shown when there are no events) -->
+<!-- 
+            <div class="flex flex-col items-center justify-center text-center mt-16 px-6">
+                <span class="material-symbols-outlined text-7xl text-primary/50">photo_camera</span>
+                <h2 class="text-xl font-bold text-gray-900 dark:text-white mt-6">No events yet!</h2>
+                <p class="text-gray-500 dark:text-gray-400 mt-2 max-w-xs">Tap the '+' button below to create your first photo adventure.</p>
+            </div>
+            -->
+</main>
+<!-- Floating Action Button -->
+<div class="fixed bottom-6 right-6 z-20">
+<button class="flex h-16 w-16 items-center justify-center rounded-full bg-primary text-white shadow-lg transition-transform hover:scale-105 active:scale-95">
+<span class="material-symbols-outlined text-4xl" style="font-variation-settings: 'wght' 300;">add</span>
+</button>
+</div>
+</div>
+</body></html>
