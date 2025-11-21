@@ -10,12 +10,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 // Database types
 export type Event = {
   id: string;
-  code: string; // NEW: Short 6-char code
+  code: string;
   title: string;
   description: string;
   owner_id: string;
   created_at: string;
-  tasks: Task[];
+  closed_at?: string;
+  winner_id?: string;
 };
 
 export type Task = {
@@ -37,13 +38,13 @@ export type Submission = {
   task_id: string;
   player_id: string;
   photo_url: string;
-  validated: boolean;
+  reactions: Record<string, number>;
   created_at: string;
 };
 
 // Generate short 6-char event code
 export const generateEventCode = (): string => {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Sin confusión: no O/0, I/1
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
   for (let i = 0; i < 6; i++) {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -51,7 +52,62 @@ export const generateEventCode = (): string => {
   return code;
 };
 
-// Photo upload success messages (random dopamine hits)
+// Close event and declare winner
+export const closeEvent = async (eventId: string, winnerId?: string) => {
+  const updates: any = {
+    closed_at: new Date().toISOString(),
+  };
+
+  if (winnerId) {
+    updates.winner_id = winnerId;
+  }
+
+  const { error } = await supabase
+    .from('events')
+    .update(updates)
+    .eq('id', eventId);
+
+  if (error) throw error;
+};
+
+// Get winner data
+export const getWinner = async (eventId: string) => {
+  const { data: event } = await supabase
+    .from('events')
+    .select('winner_id')
+    .eq('id', eventId)
+    .single();
+
+  if (!event?.winner_id) return null;
+
+  const { data: player } = await supabase
+    .from('players')
+    .select('id, name')
+    .eq('id', event.winner_id)
+    .single();
+
+  // Get winner's photo count
+  const { data: tasks } = await supabase
+    .from('tasks')
+    .select('id')
+    .eq('event_id', eventId);
+
+  const taskIds = tasks?.map((t) => t.id) || [];
+
+  const { data: submissions } = await supabase
+    .from('submissions')
+    .select('id')
+    .eq('player_id', event.winner_id)
+    .in('task_id', taskIds);
+
+  return {
+    player,
+    photoCount: submissions?.length || 0,
+    totalTasks: taskIds.length,
+  };
+};
+
+// Photo upload success messages
 export const getUploadSuccessMessage = (taskDescription: string): string => {
   const isGroupPhoto = taskDescription.toLowerCase().includes('grupo') || 
                        taskDescription.toLowerCase().includes('todos');
