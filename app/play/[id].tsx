@@ -8,11 +8,14 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Animated,
+  Modal,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Camera, CheckCircle2 } from 'lucide-react-native';
+import { Camera, CheckCircle2, Trophy, Sparkles } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { supabase } from '@/lib/supabase';
+import * as Haptics from 'expo-haptics';
+import { supabase, getUploadSuccessMessage } from '@/lib/supabase';
 
 type Task = {
   id: string;
@@ -33,9 +36,33 @@ export default function PlayerViewScreen() {
   const [playerName, setPlayerName] = useState('');
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [progressAnim] = useState(new Animated.Value(0));
 
   useEffect(() => {
     loadData();
+
+    // Subscribe to validation changes
+    const channel = supabase
+      .channel('player-submissions')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'submissions',
+          filter: `player_id=eq.${playerId}`,
+        },
+        () => {
+          loadData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const loadData = async () => {
@@ -90,6 +117,14 @@ export default function PlayerViewScreen() {
         }) || [];
 
       setTasks(mergedTasks);
+
+      // Animate progress bar
+      const completedCount = mergedTasks.filter((t) => t.submission).length;
+      const progress = completedCount / mergedTasks.length;
+      Animated.spring(progressAnim, {
+        toValue: progress,
+        useNativeDriver: false,
+      }).start();
     } catch (error) {
       console.error(error);
     } finally {
@@ -97,13 +132,15 @@ export default function PlayerViewScreen() {
     }
   };
 
-  const pickImage = async (taskId: string) => {
+  const pickImage = async (taskId: string, taskDescription: string) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (status !== 'granted') {
       Alert.alert('Permiso requerido', 'Necesitamos acceso a tus fotos');
       return;
     }
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: 'images',
@@ -113,11 +150,15 @@ export default function PlayerViewScreen() {
     });
 
     if (!result.canceled) {
-      uploadPhoto(taskId, result.assets[0].uri);
+      uploadPhoto(taskId, result.assets[0].uri, taskDescription);
     }
   };
 
-  const uploadPhoto = async (taskId: string, uri: string) => {
+  const uploadPhoto = async (
+    taskId: string,
+    uri: string,
+    taskDescription: string
+  ) => {
     setUploading(taskId);
 
     try {
@@ -127,7 +168,6 @@ export default function PlayerViewScreen() {
       const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
       const filePath = `${id}/${playerId}/${fileName}`;
 
-      // Usar el método oficial de Supabase
       const { error: uploadError } = await supabase.storage
         .from('submissions')
         .upload(filePath, blob, {
@@ -151,11 +191,21 @@ export default function PlayerViewScreen() {
 
       if (dbError) throw dbError;
 
-      Alert.alert('Listo!', 'Foto subida exitosamente');
+      // Success effects
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const message = getUploadSuccessMessage(taskDescription);
+      setSuccessMessage(message);
+      setShowSuccessModal(true);
+
+      setTimeout(() => {
+        setShowSuccessModal(false);
+      }, 2500);
+
       loadData();
     } catch (error) {
       console.error(error);
       Alert.alert('Error', 'No se pudo subir la foto');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setUploading(null);
     }
@@ -165,95 +215,156 @@ export default function PlayerViewScreen() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#6366f1" />
+        <Text style={styles.loadingText}>Cargando desafíos...</Text>
       </View>
     );
   }
 
   const completedCount = tasks.filter((t) => t.submission).length;
+  const validatedCount = tasks.filter(
+    (t) => t.submission?.validated
+  ).length;
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{eventTitle}</Text>
-        <Text style={styles.playerName}>Jugador: {playerName}</Text>
-        <View style={styles.progressBar}>
-          <View
-            style={[
-              styles.progressFill,
-              { width: `${(completedCount / tasks.length) * 100}%` },
-            ]}
-          />
-        </View>
-        <Text style={styles.progressText}>
-          {completedCount} de {tasks.length} completadas
-        </Text>
-      </View>
+    <View style={styles.container}>
+      <ScrollView>
+        <View style={styles.header}>
+          <Text style={styles.title}>{eventTitle}</Text>
+          <View style={styles.playerBadge}>
+            <Text style={styles.playerName}>👤 {playerName}</Text>
+          </View>
 
-      <View style={styles.tasksList}>
-        {tasks.map((task, index) => (
-          <View
-            key={task.id}
-            style={[
-              styles.taskCard,
-              task.submission && styles.taskCardCompleted,
-            ]}
-          >
-            <View style={styles.taskHeader}>
-              <Text style={styles.taskNumber}>#{index + 1}</Text>
-              {task.submission && (
-                <View style={styles.statusBadge}>
-                  <CheckCircle2
-                    size={16}
-                    color={task.submission.validated ? '#10b981' : '#f59e0b'}
-                  />
-                  <Text
-                    style={[
-                      styles.statusText,
-                      task.submission.validated
-                        ? styles.validatedText
-                        : styles.pendingText,
-                    ]}
-                  >
-                    {task.submission.validated ? 'Validada' : 'Pendiente'}
-                  </Text>
-                </View>
+          <View style={styles.progressContainer}>
+            <View style={styles.progressBar}>
+              <Animated.View
+                style={[
+                  styles.progressFill,
+                  {
+                    width: progressAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['0%', '100%'],
+                    }),
+                  },
+                ]}
+              />
+            </View>
+            <View style={styles.statsRow}>
+              <Text style={styles.progressText}>
+                📸 {completedCount}/{tasks.length} subidas
+              </Text>
+              {validatedCount > 0 && (
+                <Text style={styles.validatedText}>
+                  ✅ {validatedCount} validadas
+                </Text>
               )}
             </View>
-
-            <Text style={styles.taskDescription}>{task.description}</Text>
-
-            {task.submission ? (
-              <Image
-                source={{ uri: task.submission.photo_url }}
-                style={styles.taskImage}
-              />
-            ) : (
-              <TouchableOpacity
-                style={styles.uploadButton}
-                onPress={() => pickImage(task.id)}
-                disabled={uploading === task.id}
-              >
-                {uploading === task.id ? (
-                  <ActivityIndicator color="#6366f1" />
-                ) : (
-                  <>
-                    <Camera size={24} color="#6366f1" />
-                    <Text style={styles.uploadButtonText}>Subir Foto</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            )}
           </View>
-        ))}
-      </View>
+        </View>
 
-      <TouchableOpacity
-        onPress={() => router.push(`/leaderboard/${id}`)}
-        style={styles.leaderboardButton}
+        <View style={styles.tasksList}>
+          {tasks.map((task, index) => (
+            <View
+              key={task.id}
+              style={[
+                styles.taskCard,
+                task.submission && styles.taskCardCompleted,
+              ]}
+            >
+              <View style={styles.taskHeader}>
+                <View style={styles.taskNumberContainer}>
+                  <Text style={styles.taskNumber}>#{index + 1}</Text>
+                </View>
+                {task.submission && (
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      task.submission.validated && styles.statusBadgeValidated,
+                    ]}
+                  >
+                    <CheckCircle2
+                      size={16}
+                      color={task.submission.validated ? '#10b981' : '#f59e0b'}
+                    />
+                    <Text
+                      style={[
+                        styles.statusText,
+                        task.submission.validated
+                          ? styles.validatedText
+                          : styles.pendingTextBadge,
+                      ]}
+                    >
+                      {task.submission.validated ? 'Validada' : 'Pendiente'}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <Text style={styles.taskDescription}>{task.description}</Text>
+
+              {task.submission ? (
+                <View>
+                  <Image
+                    source={{ uri: task.submission.photo_url }}
+                    style={styles.taskImage}
+                  />
+                  {task.submission.validated && (
+                    <View style={styles.validatedOverlay}>
+                      <CheckCircle2 size={32} color="#10b981" />
+                      <Text style={styles.validatedOverlayText}>
+                        Aprobada! 🎉
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.uploadButton}
+                  onPress={() => pickImage(task.id, task.description)}
+                  disabled={uploading === task.id}
+                >
+                  {uploading === task.id ? (
+                    <>
+                      <ActivityIndicator color="#6366f1" />
+                      <Text style={styles.uploadingText}>Subiendo...</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Camera size={24} color="#6366f1" />
+                      <Text style={styles.uploadButtonText}>Subir Foto</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+          ))}
+        </View>
+
+        <TouchableOpacity
+          onPress={() => router.push(`/leaderboard/${id}`)}
+          style={styles.leaderboardButton}
+        >
+          <Trophy size={20} color="#fff" />
+          <Text style={styles.leaderboardButtonText}>
+            Ver Tabla de Posiciones
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
+
+      {/* Success Modal */}
+      <Modal
+        visible={showSuccessModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSuccessModal(false)}
       >
-        <Text style={styles.leaderboardButtonText}>Ver Tabla de Posiciones</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        <View style={styles.modalOverlay}>
+          <View style={styles.successModal}>
+            <Sparkles size={48} color="#6366f1" />
+            <Text style={styles.successModalText}>{successMessage}</Text>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
@@ -267,6 +378,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f9fafb',
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#6b7280',
   },
   header: {
     padding: 20,
@@ -279,28 +395,49 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     color: '#111827',
-    marginBottom: 4,
+    marginBottom: 12,
   },
-  playerName: {
-    fontSize: 16,
-    color: '#6b7280',
+  playerBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#eef2ff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
     marginBottom: 16,
   },
+  playerName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6366f1',
+  },
+  progressContainer: {
+    gap: 8,
+  },
   progressBar: {
-    height: 8,
+    height: 12,
     backgroundColor: '#e5e7eb',
-    borderRadius: 4,
+    borderRadius: 6,
     overflow: 'hidden',
-    marginBottom: 8,
   },
   progressFill: {
     height: '100%',
     backgroundColor: '#6366f1',
+    borderRadius: 6,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   progressText: {
     fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
+    fontWeight: '600',
+    color: '#374151',
+  },
+  validatedText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#10b981',
   },
   tasksList: {
     padding: 16,
@@ -308,81 +445,154 @@ const styles = StyleSheet.create({
   },
   taskCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     borderWidth: 2,
     borderColor: '#e5e7eb',
   },
   taskCardCompleted: {
     borderColor: '#6366f1',
+    backgroundColor: '#fafafa',
   },
   taskHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
+  },
+  taskNumberContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#eef2ff',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   taskNumber: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#6366f1',
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: '#f3f4f6',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#fef3c7',
+  },
+  statusBadgeValidated: {
+    backgroundColor: '#d1fae5',
   },
   statusText: {
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
   },
-  validatedText: {
-    color: '#10b981',
-  },
-  pendingText: {
+  pendingTextBadge: {
     color: '#f59e0b',
   },
   taskDescription: {
     fontSize: 16,
     color: '#374151',
     marginBottom: 12,
+    lineHeight: 22,
   },
   taskImage: {
     width: '100%',
-    height: 200,
-    borderRadius: 8,
+    height: 220,
+    borderRadius: 12,
+  },
+  validatedOverlay: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  validatedOverlayText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#10b981',
   },
   uploadButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    padding: 16,
+    gap: 12,
+    padding: 20,
     backgroundColor: '#eef2ff',
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 2,
     borderColor: '#6366f1',
     borderStyle: 'dashed',
   },
   uploadButtonText: {
     fontSize: 16,
+    fontWeight: '600',
+    color: '#6366f1',
+  },
+  uploadingText: {
+    fontSize: 14,
     fontWeight: '500',
     color: '#6366f1',
   },
   leaderboardButton: {
+    flexDirection: 'row',
     margin: 16,
-    padding: 16,
+    marginTop: 8,
+    padding: 18,
     backgroundColor: '#6366f1',
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   leaderboardButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  successModal: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 32,
+    alignItems: 'center',
+    gap: 16,
+    minWidth: 280,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  successModalText: {
+    fontSize: 18,
     fontWeight: '600',
+    color: '#111827',
+    textAlign: 'center',
+    lineHeight: 24,
   },
 });

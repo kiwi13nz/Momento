@@ -9,9 +9,12 @@ import {
   Alert,
   ActivityIndicator,
   Share,
+  Animated,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { CheckCircle2, XCircle, Share2, Trophy } from 'lucide-react-native';
+import { CheckCircle2, XCircle, Share2, Trophy, Copy, Sparkles } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { supabase } from '@/lib/supabase';
 
 type Submission = {
@@ -24,23 +27,25 @@ type Submission = {
 };
 
 export default function EventManagementScreen() {
-  const { id, ownerId } = useLocalSearchParams();
+  const { id, ownerId, code } = useLocalSearchParams();
   const router = useRouter();
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [eventTitle, setEventTitle] = useState('');
+  const [eventCode, setEventCode] = useState(code as string || '');
   const [loading, setLoading] = useState(true);
   const [validating, setValidating] = useState<string | null>(null);
+  const [copiedAnim] = useState(new Animated.Value(0));
 
   useEffect(() => {
     loadData();
-    
+
     // Subscribe to new submissions
     const channel = supabase
       .channel('submissions')
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
           table: 'submissions',
         },
@@ -56,48 +61,60 @@ export default function EventManagementScreen() {
   }, []);
 
   const loadData = async () => {
-    try {
-      // Verify owner
-      const { data: event } = await supabase
-        .from('events')
-        .select('title, owner_id')
-        .eq('id', id)
-        .single();
+  try {
+    // Verify owner and get event details
+    const { data: event } = await supabase
+      .from('events')
+      .select('title, owner_id, code')
+      .eq('id', id)
+      .single();
 
-      if (!event || event.owner_id !== ownerId) {
-        Alert.alert('Error', 'No tenés acceso a este evento');
-        router.back();
-        return;
-      }
-
-      setEventTitle(event.title);
-
-      // Load submissions with player and task info
-      const { data: submissionsData } = await supabase
-        .from('submissions')
-        .select(
-          `
-          id,
-          photo_url,
-          validated,
-          created_at,
-          player:players(name),
-          task:tasks(description)
-        `
-        )
-        .eq('task.event_id', id)
-        .order('created_at', { ascending: false });
-
-      setSubmissions(submissionsData || []);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
+    if (!event || event.owner_id !== ownerId) {
+      Alert.alert('Error', 'No tenés acceso a este evento');
+      router.back();
+      return;
     }
-  };
+
+    setEventTitle(event.title);
+    setEventCode(event.code);
+
+    // Load submissions with player and task info
+    const { data: submissionsData, error } = await supabase
+      .from('submissions')
+      .select(`
+        id,
+        photo_url,
+        validated,
+        created_at,
+        players!inner(name),
+        tasks!inner(description)
+      `)
+      .eq('task.event_id', id)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    // Map to match your Submission type
+    const formatted = (submissionsData || []).map((s: any) => ({
+      id: s.id,
+      photo_url: s.photo_url,
+      validated: s.validated,
+      created_at: s.created_at,
+      player: s.players[0], // flatten array
+      task: s.tasks[0],     // flatten array
+    }));
+
+    setSubmissions(formatted);
+  } catch (error) {
+    console.error(error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const validateSubmission = async (submissionId: string, valid: boolean) => {
     setValidating(submissionId);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
       const { error } = await supabase
@@ -106,6 +123,10 @@ export default function EventManagementScreen() {
         .eq('id', submissionId);
 
       if (error) throw error;
+
+      if (valid) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
 
       loadData();
     } catch (error) {
@@ -116,11 +137,32 @@ export default function EventManagementScreen() {
     }
   };
 
+  const copyCode = async () => {
+    await Clipboard.setStringAsync(eventCode);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    // Animate check
+    Animated.sequence([
+      Animated.timing(copiedAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.delay(1500),
+      Animated.timing(copiedAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
   const shareEvent = async () => {
     try {
       await Share.share({
-        message: `Unite a mi evento "${eventTitle}"!\n\nCódigo: ${id}\n\nDescargá Rally y unite con este código.`,
+        message: `🎉 Unite a mi evento "${eventTitle}"!\n\n📱 Código: ${eventCode}\n\nDescargá Rally y unite con este código.`,
       });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch (error) {
       console.error(error);
     }
@@ -130,17 +172,57 @@ export default function EventManagementScreen() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#6366f1" />
+        <Text style={styles.loadingText}>Cargando evento...</Text>
       </View>
     );
   }
 
   const pendingCount = submissions.filter((s) => !s.validated).length;
+  const validatedCount = submissions.filter((s) => s.validated).length;
 
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>{eventTitle}</Text>
-        <Text style={styles.eventId}>Código: {id}</Text>
+        <View style={styles.titleRow}>
+          <Trophy size={28} color="#6366f1" />
+          <Text style={styles.title}>{eventTitle}</Text>
+        </View>
+
+        {/* Code Display with Copy */}
+        <TouchableOpacity style={styles.codeContainer} onPress={copyCode}>
+          <View style={styles.codeContent}>
+            <Text style={styles.codeLabel}>Código del evento</Text>
+            <View style={styles.codeRow}>
+              <Text style={styles.codeText}>{eventCode}</Text>
+              <Animated.View
+                style={{
+                  opacity: copiedAnim,
+                  transform: [
+                    {
+                      scale: copiedAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.5, 1],
+                      }),
+                    },
+                  ],
+                }}
+              >
+                <CheckCircle2 size={20} color="#10b981" />
+              </Animated.View>
+              <Animated.View
+                style={{
+                  opacity: copiedAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [1, 0],
+                  }),
+                }}
+              >
+                <Copy size={20} color="#6366f1" />
+              </Animated.View>
+            </View>
+          </View>
+          <Text style={styles.copyHint}>Tocá para copiar</Text>
+        </TouchableOpacity>
 
         <View style={styles.actionButtons}>
           <TouchableOpacity style={styles.shareButton} onPress={shareEvent}>
@@ -157,23 +239,34 @@ export default function EventManagementScreen() {
           </TouchableOpacity>
         </View>
 
-        {pendingCount > 0 && (
-          <View style={styles.pendingBadge}>
-            <Text style={styles.pendingText}>
-              {pendingCount} {pendingCount === 1 ? 'foto' : 'fotos'} por validar
-            </Text>
+        {/* Stats Row */}
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{submissions.length}</Text>
+            <Text style={styles.statLabel}>📸 Total</Text>
           </View>
-        )}
+          <View style={[styles.statCard, styles.statCardPending]}>
+            <Text style={[styles.statNumber, styles.statNumberPending]}>
+              {pendingCount}
+            </Text>
+            <Text style={styles.statLabel}>⏳ Pendientes</Text>
+          </View>
+          <View style={[styles.statCard, styles.statCardValidated]}>
+            <Text style={[styles.statNumber, styles.statNumberValidated]}>
+              {validatedCount}
+            </Text>
+            <Text style={styles.statLabel}>✅ Validadas</Text>
+          </View>
+        </View>
       </View>
 
       <View style={styles.submissionsList}>
         {submissions.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>
-              Todavía no hay fotos subidas
-            </Text>
+            <Sparkles size={48} color="#d1d5db" />
+            <Text style={styles.emptyText}>Todavía no hay fotos</Text>
             <Text style={styles.emptySubtext}>
-              Compartí el código con los jugadores
+              Compartí el código {eventCode} con los jugadores y empezá el juego!
             </Text>
           </View>
         ) : (
@@ -181,7 +274,9 @@ export default function EventManagementScreen() {
             <View key={submission.id} style={styles.submissionCard}>
               <View style={styles.submissionHeader}>
                 <View>
-                  <Text style={styles.playerName}>{submission.player.name}</Text>
+                  <Text style={styles.playerName}>
+                    👤 {submission.player.name}
+                  </Text>
                   <Text style={styles.taskDescription}>
                     {submission.task.description}
                   </Text>
@@ -198,7 +293,7 @@ export default function EventManagementScreen() {
                       submission.validated && styles.validatedBadgeText,
                     ]}
                   >
-                    {submission.validated ? 'Validada' : 'Pendiente'}
+                    {submission.validated ? '✅ Validada' : '⏳ Pendiente'}
                   </Text>
                 </View>
               </View>
@@ -215,8 +310,16 @@ export default function EventManagementScreen() {
                     onPress={() => validateSubmission(submission.id, true)}
                     disabled={validating === submission.id}
                   >
-                    <CheckCircle2 size={20} color="#fff" />
-                    <Text style={styles.validationButtonText}>Aprobar</Text>
+                    {validating === submission.id ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <>
+                        <CheckCircle2 size={20} color="#fff" />
+                        <Text style={styles.validationButtonText}>
+                          Aprobar
+                        </Text>
+                      </>
+                    )}
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -247,6 +350,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f9fafb',
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#6b7280',
   },
   header: {
     padding: 20,
@@ -254,23 +362,58 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
+    gap: 16,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#111827',
-    marginBottom: 4,
+    flex: 1,
   },
-  eventId: {
-    fontSize: 14,
-    color: '#6b7280',
+  codeContainer: {
+    backgroundColor: '#eef2ff',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: '#6366f1',
+    borderStyle: 'dashed',
+  },
+  codeContent: {
+    gap: 4,
+  },
+  codeLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6366f1',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  codeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  codeText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#111827',
     fontFamily: 'monospace',
-    marginBottom: 16,
+    letterSpacing: 4,
+    flex: 1,
+  },
+  copyHint: {
+    fontSize: 11,
+    color: '#6b7280',
+    marginTop: 4,
   },
   actionButtons: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 16,
   },
   shareButton: {
     flex: 1,
@@ -278,13 +421,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    padding: 12,
+    padding: 14,
     backgroundColor: '#eef2ff',
-    borderRadius: 8,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#6366f1',
   },
   shareButtonText: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#6366f1',
   },
   leaderboardButton: {
@@ -293,50 +438,80 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    padding: 12,
+    padding: 14,
     backgroundColor: '#6366f1',
-    borderRadius: 8,
+    borderRadius: 12,
   },
   leaderboardButtonText: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#fff',
   },
-  pendingBadge: {
-    padding: 12,
-    backgroundColor: '#fef3c7',
-    borderRadius: 8,
+  statsRow: {
+    flexDirection: 'row',
+    gap: 12,
   },
-  pendingText: {
-    fontSize: 14,
+  statCard: {
+    flex: 1,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+  },
+  statCardPending: {
+    backgroundColor: '#fef3c7',
+  },
+  statCardValidated: {
+    backgroundColor: '#d1fae5',
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  statNumberPending: {
+    color: '#f59e0b',
+  },
+  statNumberValidated: {
+    color: '#10b981',
+  },
+  statLabel: {
+    fontSize: 11,
+    color: '#6b7280',
     fontWeight: '500',
-    color: '#92400e',
-    textAlign: 'center',
+    marginTop: 2,
   },
   submissionsList: {
     padding: 16,
     gap: 16,
   },
   emptyState: {
-    padding: 40,
+    padding: 60,
     alignItems: 'center',
+    gap: 12,
   },
   emptyText: {
-    fontSize: 18,
-    fontWeight: '500',
+    fontSize: 20,
+    fontWeight: '600',
     color: '#6b7280',
-    marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 14,
     color: '#9ca3af',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   submissionCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   submissionHeader: {
     flexDirection: 'row',
@@ -346,7 +521,7 @@ const styles = StyleSheet.create({
   },
   playerName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#111827',
   },
   taskDescription: {
@@ -358,23 +533,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     backgroundColor: '#fef3c7',
-    borderRadius: 12,
+    borderRadius: 16,
   },
   validatedBadge: {
     backgroundColor: '#d1fae5',
   },
   statusBadgeText: {
     fontSize: 12,
-    fontWeight: '500',
-    color: '#92400e',
+    fontWeight: '600',
+    color: '#f59e0b',
   },
   validatedBadgeText: {
-    color: '#065f46',
+    color: '#10b981',
   },
   submissionImage: {
     width: '100%',
-    height: 250,
-    borderRadius: 8,
+    height: 280,
+    borderRadius: 12,
     marginBottom: 12,
   },
   validationButtons: {
@@ -387,8 +562,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    padding: 12,
-    borderRadius: 8,
+    padding: 14,
+    borderRadius: 12,
   },
   approveButton: {
     backgroundColor: '#10b981',
@@ -398,7 +573,7 @@ const styles = StyleSheet.create({
   },
   validationButtonText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#fff',
   },
 });
