@@ -1,20 +1,35 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
   StyleSheet,
+  ScrollView,
+  TouchableOpacity,
   Alert,
-  ActivityIndicator,
-  Animated,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { X, Plus, Sparkles } from 'lucide-react-native';
+import { X, Plus, Sparkles, ArrowLeft } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { supabase, generateEventCode } from '@/lib/supabase';
+import { colors, spacing, typography, borderRadius } from '@/lib/design-tokens';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { supabase } from '@/lib/supabase';
 import { saveOwnerEvent } from '@/lib/storage';
+import { RouteErrorBoundary } from '@/components/shared/RouteErrorBoundary';
+import { AnalyticsService, Events } from '@/services/analytics';
+import { EventCreatedModal } from '@/components/shared/EventCreatedModal';
+
+// Helper function for generating codes
+function generateEventCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude confusing chars
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
 
 export default function CreateEventScreen() {
   const router = useRouter();
@@ -22,18 +37,31 @@ export default function CreateEventScreen() {
   const [description, setDescription] = useState('');
   const [tasks, setTasks] = useState(['', '', '']);
   const [loading, setLoading] = useState(false);
-  const [scaleAnim] = useState(new Animated.Value(1));
+  const [titleError, setTitleError] = useState('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [createdEvent, setCreatedEvent] = useState<{ 
+    id: string; 
+    code: string; 
+    title: string;
+    ownerId: string;
+  } | null>(null);
 
   const addTask = () => {
+    if (tasks.length >= 10) {
+      Alert.alert('Limit Reached', 'Maximum 10 tasks allowed');
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setTasks([...tasks, '']);
   };
 
   const removeTask = (index: number) => {
-    if (tasks.length > 1) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      setTasks(tasks.filter((_, i) => i !== index));
+    if (tasks.length <= 1) {
+      Alert.alert('Minimum Required', 'At least 1 task is required');
+      return;
     }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setTasks(tasks.filter((_, i) => i !== index));
   };
 
   const updateTask = (index: number, value: string) => {
@@ -42,23 +70,31 @@ export default function CreateEventScreen() {
     setTasks(newTasks);
   };
 
-  const createEvent = async () => {
+  const validateInputs = () => {
+    let isValid = true;
+
     if (!title.trim()) {
-      Alert.alert('Error', 'El evento necesita un nombre');
-      return;
+      setTitleError('Event name is required');
+      isValid = false;
     }
 
     const validTasks = tasks.filter((t) => t.trim().length > 0);
     if (validTasks.length === 0) {
-      Alert.alert('Error', 'Agregá al menos una tarea');
-      return;
+      Alert.alert('Error', 'Add at least one task');
+      isValid = false;
     }
+
+    return isValid;
+  };
+
+  const createEvent = async () => {
+    if (!validateInputs()) return;
 
     setLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
     try {
-      // Generate unique event code
+      // Generate unique code
       let eventCode = generateEventCode();
       let codeExists = true;
       let attempts = 0;
@@ -66,16 +102,19 @@ export default function CreateEventScreen() {
       while (codeExists && attempts < 10) {
         const { data } = await supabase
           .from('events')
-          .select('code')
+          .select('id')
           .eq('code', eventCode)
-          .maybeSingle();
-
-        if (!data) {
-          codeExists = false;
-        } else {
+          .single();
+        
+        codeExists = !!data;
+        if (codeExists) {
           eventCode = generateEventCode();
-          attempts++;
         }
+        attempts++;
+      }
+
+      if (codeExists) {
+        throw new Error('Failed to generate unique code');
       }
 
       // Generate owner ID
@@ -85,9 +124,9 @@ export default function CreateEventScreen() {
       const { data: event, error: eventError } = await supabase
         .from('events')
         .insert({
-          code: eventCode,
           title: title.trim(),
           description: description.trim(),
+          code: eventCode,
           owner_id: ownerId,
         })
         .select()
@@ -96,19 +135,20 @@ export default function CreateEventScreen() {
       if (eventError) throw eventError;
 
       // Create tasks
-      const tasksToInsert = validTasks.map((task, index) => ({
+      const validTasks = tasks.filter((t) => t.trim().length > 0);
+      const taskInserts = validTasks.map((description, index) => ({
         event_id: event.id,
-        description: task.trim(),
-        order_number: index,
+        description: description.trim(),
+        order_number: index + 1,
       }));
 
       const { error: tasksError } = await supabase
         .from('tasks')
-        .insert(tasksToInsert);
+        .insert(taskInserts);
 
       if (tasksError) throw tasksError;
 
-      // Save to AsyncStorage
+      // Save to local storage
       await saveOwnerEvent({
         eventId: event.id,
         eventCode: event.code,
@@ -117,233 +157,274 @@ export default function CreateEventScreen() {
         createdAt: new Date().toISOString(),
       });
 
-      // Success animation
-      Animated.sequence([
-        Animated.spring(scaleAnim, {
-          toValue: 1.1,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      // Track event creation
+      AnalyticsService.trackEvent(Events.USER_CREATED_EVENT, {
+        eventId: event.id,
+        eventTitle: event.title,
+        taskCount: validTasks.length,
+      });
 
-      // Navigate to event management
-      setTimeout(() => {
-        router.replace({
-          pathname: '/event/[id]',
-          params: { id: event.id, ownerId, code: event.code },
-        });
-      }, 300);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // Show success modal instead of navigating immediately
+      setCreatedEvent({
+        id: event.id,
+        code: event.code,
+        title: event.title,
+        ownerId: ownerId,
+      });
+      setShowSuccessModal(true);
     } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'No se pudo crear el evento');
+      console.error('Create event failed:', error);
+      Alert.alert('Error', 'Failed to create event. Please try again.');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      
+      // Log error to analytics
+      AnalyticsService.logError(error as Error, {
+        context: 'create_event',
+        title: title.trim(),
+      });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Sparkles size={28} color="#6366f1" style={styles.headerIcon} />
-        <Text style={styles.title}>Crear Evento</Text>
-        <Text style={styles.subtitle}>Dale vida a tu fiesta 🎉</Text>
-      </View>
+    <RouteErrorBoundary routeName="create-event">
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <ArrowLeft size={24} color={colors.text} />
+            </TouchableOpacity>
+          </View>
 
-      <View style={styles.form}>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Nombre del Evento</Text>
-          <TextInput
-            style={styles.input}
-            value={title}
-            onChangeText={setTitle}
-            placeholder="Ej: Cumple de Facu"
-            placeholderTextColor="#9ca3af"
-          />
-        </View>
+          {/* Hero */}
+          <View style={styles.hero}>
+            <Sparkles size={40} color={colors.primary} />
+            <Text style={styles.title}>Create Event</Text>
+            <Text style={styles.subtitle}>Set up your photo challenge 📸</Text>
+          </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Descripción (opcional)</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            value={description}
-            onChangeText={setDescription}
-            placeholder="De qué se trata..."
-            placeholderTextColor="#9ca3af"
-            multiline
-            numberOfLines={3}
-          />
-        </View>
+          {/* Form */}
+          <View style={styles.form}>
+            <Input
+              label="Event Name"
+              value={title}
+              onChangeText={(text) => {
+                setTitle(text);
+                setTitleError('');
+              }}
+              placeholder="Birthday Party, Team Outing..."
+              error={titleError}
+            />
 
-        <View style={styles.tasksSection}>
-          <Text style={styles.label}>Desafíos Fotográficos</Text>
-          <Text style={styles.helpText}>
-            ¿Qué fotos querés que suban los jugadores?
-          </Text>
+            <Input
+              label="Description (Optional)"
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Tell players what this is about..."
+              multiline
+              numberOfLines={3}
+              style={styles.textArea}
+            />
 
-          {tasks.map((task, index) => (
-            <View key={index} style={styles.taskRow}>
-              <TextInput
-                style={[styles.input, styles.taskInput]}
-                value={task}
-                onChangeText={(value) => updateTask(index, value)}
-                placeholder={`Ej: Foto con alguien de amarillo`}
-                placeholderTextColor="#9ca3af"
-              />
-              {tasks.length > 1 && (
-                <TouchableOpacity
-                  onPress={() => removeTask(index)}
-                  style={styles.removeButton}
-                >
-                  <X size={20} color="#ef4444" />
+            {/* Tasks Section */}
+            <View style={styles.tasksSection}>
+              <Text style={styles.sectionTitle}>Photo Challenges</Text>
+              <Text style={styles.sectionSubtitle}>
+                What photos should players take?
+              </Text>
+
+              {tasks.map((task, index) => (
+                <View key={index} style={styles.taskRow}>
+                  <View style={styles.taskNumber}>
+                    <Text style={styles.taskNumberText}>#{index + 1}</Text>
+                  </View>
+                  <Input
+                    value={task}
+                    onChangeText={(value) => updateTask(index, value)}
+                    placeholder="e.g., Photo with someone in yellow"
+                    containerStyle={styles.taskInput}
+                  />
+                  {tasks.length > 1 && (
+                    <TouchableOpacity
+                      onPress={() => removeTask(index)}
+                      style={styles.removeButton}
+                    >
+                      <X size={20} color={colors.error} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+
+              {tasks.length < 10 && (
+                <TouchableOpacity onPress={addTask} style={styles.addButton}>
+                  <Plus size={20} color={colors.primary} />
+                  <Text style={styles.addButtonText}>Add Challenge</Text>
                 </TouchableOpacity>
               )}
             </View>
-          ))}
 
-          <TouchableOpacity onPress={addTask} style={styles.addButton}>
-            <Plus size={20} color="#6366f1" />
-            <Text style={styles.addButtonText}>Agregar desafío</Text>
-          </TouchableOpacity>
-        </View>
+            {/* Actions */}
+            <View style={styles.actions}>
+              <Button
+                onPress={createEvent}
+                loading={loading}
+                disabled={loading}
+                fullWidth
+                size="large"
+              >
+                Create Event
+              </Button>
 
-        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-          <TouchableOpacity
-            style={[styles.createButton, loading && styles.disabledButton]}
-            onPress={createEvent}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.createButtonText}>🚀 Crear Evento</Text>
-            )}
-          </TouchableOpacity>
-        </Animated.View>
+              <Button
+                onPress={() => router.back()}
+                variant="ghost"
+                fullWidth
+                disabled={loading}
+              >
+                Cancel
+              </Button>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.cancelButton}
-        >
-          <Text style={styles.cancelButtonText}>Cancelar</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+      {/* Success Modal */}
+      {createdEvent && (
+        <EventCreatedModal
+          visible={showSuccessModal}
+          eventCode={createdEvent.code}
+          eventTitle={createdEvent.title}
+          onContinue={() => {
+            setShowSuccessModal(false);
+            router.replace({
+              pathname: '/(event)/[id]',
+              params: {
+                id: createdEvent.id,
+                ownerId: createdEvent.ownerId,
+                code: createdEvent.code,
+              },
+            });
+          }}
+        />
+      )}
+    </RouteErrorBoundary>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: colors.background,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: spacing.xxl,
   },
   header: {
-    padding: 20,
     paddingTop: 60,
-    alignItems: 'center',
+    paddingHorizontal: spacing.m,
+    paddingBottom: spacing.m,
   },
-  headerIcon: {
-    marginBottom: 8,
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hero: {
+    alignItems: 'center',
+    paddingHorizontal: spacing.l,
+    paddingBottom: spacing.xl,
+    gap: spacing.m,
   },
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#111827',
+    ...typography.title,
+    color: colors.text,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#6b7280',
-    marginTop: 4,
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   form: {
-    padding: 20,
-    gap: 24,
-  },
-  inputGroup: {
-    gap: 8,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-  },
-  helpText: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#111827',
+    paddingHorizontal: spacing.l,
+    gap: spacing.l,
   },
   textArea: {
     height: 80,
     textAlignVertical: 'top',
   },
   tasksSection: {
-    gap: 12,
+    gap: spacing.m,
+  },
+  sectionTitle: {
+    ...typography.headline,
+    color: colors.text,
+  },
+  sectionSubtitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
   },
   taskRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: spacing.s,
+    alignItems: 'flex-start',
+  },
+  taskNumber: {
+    width: 32,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 32,
+  },
+  taskNumberText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '700',
   },
   taskInput: {
     flex: 1,
   },
   removeButton: {
-    padding: 8,
+    width: 32,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 32,
   },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    padding: 16,
+    gap: spacing.s,
+    padding: spacing.m,
     borderWidth: 2,
-    borderColor: '#6366f1',
-    borderRadius: 12,
+    borderColor: colors.primary,
+    borderRadius: borderRadius.m,
     borderStyle: 'dashed',
-    backgroundColor: '#eef2ff',
+    backgroundColor: colors.surface,
   },
   addButtonText: {
-    color: '#6366f1',
-    fontSize: 16,
-    fontWeight: '600',
+    ...typography.bodyBold,
+    color: colors.primary,
   },
-  createButton: {
-    backgroundColor: '#6366f1',
-    padding: 18,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 16,
-    shadowColor: '#6366f1',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  createButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  cancelButton: {
-    padding: 16,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    color: '#6b7280',
-    fontSize: 16,
+  actions: {
+    gap: spacing.m,
+    marginTop: spacing.l,
   },
 });

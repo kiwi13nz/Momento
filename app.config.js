@@ -1,22 +1,22 @@
 export default {
   expo: {
-    name: "Rally",
-    slug: "rally-app",
+    name: "Flick",
+    slug: "flick-app",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
-    scheme: "rally",
-    userInterfaceStyle: "automatic",
+    scheme: "flick",
+    userInterfaceStyle: "dark",
     newArchEnabled: true,
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.rally.app"
+      bundleIdentifier: "com.flick.app"
     },
     android: {
-      package: "com.rally.app",
+      package: "com.flick.app",
       adaptiveIcon: {
         foregroundImage: "./assets/images/icon.png",
-        backgroundColor: "#6366f1"
+        backgroundColor: "#FF6B35"
       }
     },
     web: {
@@ -24,13 +24,44 @@ export default {
       output: "single",
       favicon: "./assets/images/favicon.png"
     },
-    plugins: ["expo-router", "expo-font", "expo-camera"],
+    plugins: [
+      "expo-router",
+      "expo-font",
+      "expo-camera",
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          icon: "./assets/images/notification-icon.png", // Optional: custom notification icon
+          color: "#FF6B35",
+        }
+      ],
+      [
+        "sentry-expo",
+        {
+          organization: "your-org",
+          project: "flick-app",
+        }
+      ]
+    ],
     experiments: {
       typedRoutes: true
     },
     extra: {
       supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
       supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+      sentryDsn: process.env.SENTRY_DSN,
+    },
+    hooks: {
+      postPublish: [
+        {
+          file: "sentry-expo/upload-sourcemaps",
+          config: {
+            organization: "your-org",
+            project: "flick-app",
+          }
+        }
+      ]
     }
   }
 };

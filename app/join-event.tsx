@@ -1,214 +1,329 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
   StyleSheet,
   Alert,
-  ActivityIndicator,
-  Animated,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Users, Zap } from 'lucide-react-native';
+import { Users, Zap, ArrowLeft } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { colors, spacing, typography, borderRadius } from '@/lib/design-tokens';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { EventPreview } from '@/components/event/EventPreview';
+import { EventService, PlayerService, PhotoService } from '@/services/api';
+import { SessionService } from '@/services/session';
 import { supabase } from '@/lib/supabase';
+import { TouchableOpacity } from 'react-native';
+import { RouteErrorBoundary } from '@/components/shared/RouteErrorBoundary';
+import type { Event, Photo } from '@/types';
+import { AnalyticsService, Events } from '@/services/analytics';
 
 export default function JoinEventScreen() {
   const router = useRouter();
   const [eventCode, setEventCode] = useState('');
   const [playerName, setPlayerName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [scaleAnim] = useState(new Animated.Value(1));
+  const [codeError, setCodeError] = useState('');
+  const [nameError, setNameError] = useState('');
+  const [eventPreview, setEventPreview] = useState<{
+    event: Event;
+    playerCount: number;
+    photoCount: number;
+    recentPhotos: Photo[];
+  } | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   const formatCode = (text: string) => {
-    // Auto-uppercase and limit to 6 chars
     return text.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
   };
 
-  const joinEvent = async () => {
-    const trimmedCode = eventCode.trim();
-    const trimmedName = playerName.trim();
+  const handleCodeChange = (text: string) => {
+    setEventCode(formatCode(text));
+    setCodeError('');
+  };
 
-    if (!trimmedCode || !trimmedName) {
-      Alert.alert('Error', 'Completá todos los campos');
-      return;
-    }
+  const handleNameChange = (text: string) => {
+    setPlayerName(text);
+    setNameError('');
+  };
 
-    if (trimmedCode.length !== 6) {
-      Alert.alert('Error', 'El código debe tener 6 caracteres');
-      return;
+  const validateCode = async () => {
+    if (!eventCode.trim()) {
+      setCodeError('Enter event code');
+      return false;
     }
+    if (eventCode.length !== 6) {
+      setCodeError('Code must be 6 characters');
+      return false;
+    }
+    return true;
+  };
+
+  const loadEventPreview = async () => {
+    if (!(await validateCode())) return;
 
     setLoading(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
-      // Check if event exists by code
-      const { data: event, error: eventError } = await supabase
-        .from('events')
-        .select('id, title, code')
-        .eq('code', trimmedCode)
-        .maybeSingle();
+      const event = await EventService.getByCode(eventCode);
+      const photos = await PhotoService.getByEventId(event.id);
+      const recentPhotos = photos.slice(0, 5);
 
-      if (eventError || !event) {
-        Alert.alert('Error', 'Evento no encontrado. Revisá el código 🤔');
-        setLoading(false);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        return;
-      }
-
-      // Check for duplicate names (case-insensitive)
-      const { data: existingPlayers } = await supabase
+      // Get player count
+      const { data: players } = await supabase
         .from('players')
-        .select('name')
+        .select('id')
         .eq('event_id', event.id);
 
-      const nameExists = existingPlayers?.some(
-        (p) => p.name.toLowerCase() === trimmedName.toLowerCase()
-      );
-
-      if (nameExists) {
-        Alert.alert(
-          'Nombre en uso',
-          'Ya hay alguien con ese nombre en el evento. Probá con otro! 😅'
-        );
-        setLoading(false);
-        return;
+      setEventPreview({
+        event,
+        playerCount: players?.length || 0,
+        photoCount: photos.length,
+        recentPhotos,
+      });
+      setShowPreview(true);
+    } catch (error: any) {
+      if (error.message?.includes('not found')) {
+        setCodeError('Event not found');
+      } else {
+        Alert.alert('Error', 'Failed to load event preview');
       }
-
-      // Create player
-      const { data: player, error: playerError } = await supabase
-        .from('players')
-        .insert({
-          event_id: event.id,
-          name: trimmedName,
-        })
-        .select()
-        .single();
-
-      if (playerError) throw playerError;
-
-      // Success haptic
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      // Animate button
-      Animated.sequence([
-        Animated.spring(scaleAnim, {
-          toValue: 1.1,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          useNativeDriver: true,
-        }),
-      ]).start();
-
-      // Navigate to player view
-      setTimeout(() => {
-        router.replace({
-          pathname: '/play/[id]',
-          params: { id: event.id, playerId: player.id },
-        });
-      }, 300);
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'No se pudo unir al evento');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setLoading(false);
     }
   };
 
+  const joinEvent = async () => {
+  if (!playerName.trim()) {
+    setNameError('Enter your name');
+    return;
+  }
+
+  if (!eventPreview) return;
+
+  setLoading(true);
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+  try {
+    // Check for duplicate name
+    const nameExists = await PlayerService.checkNameExists(
+      eventPreview.event.id,
+      playerName.trim()
+    );
+    if (nameExists) {
+      setNameError('Name already taken');
+      setLoading(false);
+      return;
+    }
+
+    // Create session with invisible auth
+    const session = await SessionService.createSession(
+      eventPreview.event.id,
+      playerName.trim()
+    );
+    
+    // Set user context for error tracking
+    AnalyticsService.setUser(session.playerId, {
+      playerName: playerName.trim(),
+      eventId: eventPreview.event.id,
+    });
+
+    // Track successful join
+    AnalyticsService.trackEvent(Events.USER_JOINED, {
+      eventId: eventPreview.event.id,
+      eventTitle: eventPreview.event.title,
+      playerCount: eventPreview.playerCount + 1,
+    });
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    // Navigate to feed
+    router.replace({
+      pathname: '/(event)/[id]',
+      params: {
+        id: eventPreview.event.id,
+        playerId: session.playerId,
+      },
+    });
+  } catch (error) {
+    console.error('Join failed:', error);
+    
+    // Log error to Sentry
+    AnalyticsService.logError(error as Error, {
+      eventCode,
+      playerName,
+      screen: 'join-event',
+    });
+    
+    // Track failed join
+    AnalyticsService.trackEvent(Events.JOIN_FAILED, {
+      error: (error as Error).message,
+      eventCode,
+    });
+    
+    Alert.alert('Error', 'Failed to join event');
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+  } finally {
+    setLoading(false);
+  }
+};
+
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.iconContainer}>
-          <Users size={40} color="#6366f1" />
-          <Zap
-            size={24}
-            color="#fbbf24"
-            style={styles.zapIcon}
-          />
-        </View>
-        <Text style={styles.title}>Unirse a Evento</Text>
-        <Text style={styles.subtitle}>
-          Ingresá el código y a jugar! 🎮
-        </Text>
-      </View>
-
-      <View style={styles.form}>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Código del Evento</Text>
-          <TextInput
-            style={[styles.input, styles.codeInput]}
-            value={eventCode}
-            onChangeText={(text) => setEventCode(formatCode(text))}
-            placeholder="XY3K9P"
-            placeholderTextColor="#9ca3af"
-            autoCapitalize="characters"
-            maxLength={6}
-            autoCorrect={false}
-          />
-          <Text style={styles.helperText}>
-            6 caracteres (te lo pasó el organizador)
-          </Text>
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Tu Nombre</Text>
-          <TextInput
-            style={styles.input}
-            value={playerName}
-            onChangeText={setPlayerName}
-            placeholder="Ej: Facundo"
-            placeholderTextColor="#9ca3af"
-            maxLength={30}
-          />
-          <Text style={styles.helperText}>
-            Tiene que ser único en este evento
-          </Text>
-        </View>
-
-        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-          <TouchableOpacity
-            style={[styles.joinButton, loading && styles.disabledButton]}
-            onPress={joinEvent}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.joinButtonText}>🎯 Unirme al Evento</Text>
-            )}
-          </TouchableOpacity>
-        </Animated.View>
-
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.cancelButton}
+    <RouteErrorBoundary routeName="join-event">
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.cancelButtonText}>Volver</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <ArrowLeft size={24} color={colors.text} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Hero */}
+          <View style={styles.hero}>
+            <View style={styles.iconContainer}>
+              <Users size={40} color={colors.primary} />
+              <View style={styles.zapIcon}>
+                <Zap size={24} color={colors.warning} fill={colors.warning} />
+              </View>
+            </View>
+            <Text style={styles.title}>Join Event</Text>
+            <Text style={styles.subtitle}>Enter the code to start playing 🎮</Text>
+          </View>
+
+          {/* Form */}
+          <View style={styles.form}>
+            <Input
+              label="Event Code"
+              value={eventCode}
+              onChangeText={handleCodeChange}
+              placeholder="XY3K9P"
+              autoCapitalize="characters"
+              maxLength={6}
+              autoCorrect={false}
+              error={codeError}
+              helperText="6-character code from event host"
+              style={styles.codeInput}
+              editable={!showPreview}
+            />
+
+            {!showPreview ? (
+              <Button
+                onPress={loadEventPreview}
+                loading={loading}
+                disabled={loading || eventCode.length !== 6}
+                fullWidth
+                size="large"
+              >
+                Preview Event
+              </Button>
+            ) : (
+              <>
+                <Input
+                  label="Your Name"
+                  value={playerName}
+                  onChangeText={handleNameChange}
+                  placeholder="Enter your name"
+                  maxLength={30}
+                  error={nameError}
+                  helperText="Must be unique in this event"
+                />
+
+                <Button
+                  onPress={joinEvent}
+                  loading={loading}
+                  disabled={loading}
+                  fullWidth
+                  size="large"
+                  variant="gradient"
+                >
+                  Join Event
+                </Button>
+
+                <Button
+                  onPress={() => {
+                    setShowPreview(false);
+                    setEventPreview(null);
+                  }}
+                  variant="ghost"
+                  fullWidth
+                  disabled={loading}
+                >
+                  Change Code
+                </Button>
+              </>
+            )}
+
+            {!showPreview && (
+              <Button
+                onPress={() => router.back()}
+                variant="ghost"
+                fullWidth
+                disabled={loading}
+              >
+                Cancel
+              </Button>
+            )}
+          </View>
+
+          {/* Event Preview */}
+          {eventPreview && showPreview && (
+            <View style={styles.previewContainer}>
+              <EventPreview
+                event={eventPreview.event}
+                playerCount={eventPreview.playerCount}
+                photoCount={eventPreview.photoCount}
+                recentPhotos={eventPreview.recentPhotos}
+              />
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </RouteErrorBoundary>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
-    padding: 20,
+    backgroundColor: colors.background,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   header: {
-    marginTop: 80,
-    marginBottom: 40,
+    paddingTop: 60,
+    paddingHorizontal: spacing.m,
+    paddingBottom: spacing.m,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hero: {
+    alignItems: 'center',
+    paddingHorizontal: spacing.l,
+    paddingBottom: spacing.xl,
   },
   iconContainer: {
     position: 'relative',
-    marginBottom: 16,
+    marginBottom: spacing.l,
   },
   zapIcon: {
     position: 'absolute',
@@ -216,73 +331,28 @@ const styles = StyleSheet.create({
     right: -12,
   },
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 8,
+    ...typography.title,
+    color: colors.text,
+    marginBottom: spacing.s,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#6b7280',
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   form: {
-    gap: 24,
-  },
-  inputGroup: {
-    gap: 8,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-  },
-  input: {
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#111827',
+    paddingHorizontal: spacing.l,
+    gap: spacing.l,
   },
   codeInput: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: '700',
     letterSpacing: 4,
     textAlign: 'center',
-    fontFamily: 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
-  helperText: {
-    fontSize: 13,
-    color: '#9ca3af',
-    marginTop: 4,
-  },
-  joinButton: {
-    backgroundColor: '#6366f1',
-    padding: 18,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 16,
-    shadowColor: '#6366f1',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  joinButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  cancelButton: {
-    padding: 16,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    color: '#6b7280',
-    fontSize: 16,
+  previewContainer: {
+    marginTop: spacing.l,
+    marginHorizontal: spacing.l,
   },
 });

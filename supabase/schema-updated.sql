@@ -7,7 +7,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Events table (UPDATED with code column)
 CREATE TABLE IF NOT EXISTS events (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  code TEXT UNIQUE NOT NULL, -- NEW: 6-char short code
+  code TEXT UNIQUE aNOT NULL, -- NEW: 6-char short code
   title TEXT NOT NULL,
   description TEXT,
   owner_id TEXT NOT NULL,
