@@ -1,149 +1,199 @@
+// hooks/usePhotos.ts
 import { useState, useEffect, useCallback } from 'react';
-import { useFocusEffect } from 'expo-router';
-import { PhotoService } from '@/services/api';
-import { supabase } from '@/lib/supabase';
-import type { Photo } from '@/types';
-import type { RealtimeChannel } from '@supabase/supabase-js';
+import { PhotoService, supabase } from '@/services/api';
+import { RateLimiter } from '@/services/rate-limiter';
+import type { Photo, Reactions } from '@/types';
 
-const PHOTOS_PER_PAGE = 20;
+// Rate limiter: 30 reactions per minute
+const reactionLimiter = RateLimiter.create('reaction', 30, 60000);
 
 export function usePhotos(eventId: string) {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-  const [hasMore, setHasMore] = useState(true);
-  const [page, setPage] = useState(0);
+  const [userReactions, setUserReactions] = useState<Map<string, Set<string>>>(new Map());
 
-  // Load photos on mount
-  useEffect(() => {
-    loadPhotos();
-  }, [eventId]);
-
-  // ✅ FIXED: Safe subscription with mounted flag
-  useFocusEffect(
-    useCallback(() => {
-      console.log('📡 Setting up real-time subscription');
-      let channel: RealtimeChannel | null = null;
-      let mounted = true; // ✅ Track if component is still mounted
-
-      const setupSubscription = async () => {
-        if (!mounted) return; // ✅ Don't setup if already unmounted
-        channel = await setupRealtimeSubscription();
-      };
-
-      setupSubscription();
-
-      return () => {
-        mounted = false; // ✅ Mark as unmounted first
-        console.log('🔌 Cleaning up real-time subscription');
-        if (channel) {
-          supabase.removeChannel(channel);
-        }
-      };
-    }, [eventId])
-  );
-
-  const loadPhotos = async () => {
+  // Load photos
+  const loadPhotos = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await PhotoService.getByEventIdPaginated(eventId, 0, PHOTOS_PER_PAGE);
+      const data = await PhotoService.getByEventId(eventId);
       setPhotos(data);
-      setHasMore(data.length === PHOTOS_PER_PAGE);
-      setPage(0);
-    } catch (err) {
-      console.error('Failed to load photos:', err);
-      setError(err as Error);
+
+      // Load user's reactions for all photos
+      const submissionIds = data.map((p) => p.id);
+      const reactions = await PhotoService.getUserReactions(submissionIds);
+      setUserReactions(reactions);
+    } catch (error) {
+      console.error('Failed to load photos:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [eventId]);
 
-  const setupRealtimeSubscription = async (): Promise<RealtimeChannel | null> => {
-    const { data: tasks } = await supabase
-      .from('tasks')
-      .select('id')
-      .eq('event_id', eventId);
+  // Subscribe to real-time updates (optimized)
+  useEffect(() => {
+    loadPhotos();
 
-    if (!tasks || tasks.length === 0) return null;
-
-    const taskIds = tasks.map((t) => t.id);
-
+    // Single subscription per event for photo_reactions table
     const channel = supabase
-      .channel(`photos-${eventId}`)
+      .channel(`event-reactions:${eventId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'photo_reactions',
+        },
+        async (payload) => {
+          console.log('Real-time reaction update:', payload);
+
+          // Update specific photo's reactions
+          if (payload.eventType === 'INSERT' || payload.eventType === 'DELETE') {
+            const submissionId = (payload.new || payload.old as any).submission_id;
+
+            // Fetch updated counts for this photo
+            const reactions = await PhotoService.getReactionCounts(submissionId);
+
+            setPhotos((prev) =>
+              prev.map((photo) =>
+                photo.id === submissionId
+                  ? { ...photo, reactions }
+                  : photo
+              )
+            );
+
+            // Update userReactions if current user made the change
+            if (payload.eventType === 'INSERT') {
+              const { submission_id, reaction_type } = payload.new;
+              setUserReactions((prev) => {
+                const newMap = new Map(prev);
+                if (!newMap.has(submission_id)) {
+                  newMap.set(submission_id, new Set());
+                }
+                newMap.get(submission_id)!.add(reaction_type);
+                return newMap;
+              });
+            } else if (payload.eventType === 'DELETE') {
+              const { submission_id, reaction_type } = payload.old;
+              setUserReactions((prev) => {
+                const newMap = new Map(prev);
+                if (newMap.has(submission_id)) {
+                  newMap.get(submission_id)!.delete(reaction_type);
+                }
+                return newMap;
+              });
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    // Subscribe to new submissions
+    const submissionsChannel = supabase
+      .channel(`event-submissions:${eventId}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'submissions',
-          filter: `task_id=in.(${taskIds.join(',')})`,
         },
         () => {
-          console.log('📸 New photo uploaded, refreshing...');
+          console.log('New submission detected, refreshing...');
           loadPhotos();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'submissions',
-          filter: `task_id=in.(${taskIds.join(',')})`,
-        },
-        (payload) => {
-          console.log('♻️ Photo updated:', payload.new.id);
-          setPhotos((prev) =>
-            prev.map((photo) =>
-              photo.id === payload.new.id
-                ? { ...photo, reactions: payload.new.reactions }
-                : photo
-            )
-          );
         }
       )
       .subscribe();
 
-    return channel;
-  };
+    return () => {
+      supabase.removeChannel(channel);
+      supabase.removeChannel(submissionsChannel);
+    };
+  }, [eventId, loadPhotos]);
 
-  const loadMore = async () => {
-    if (!hasMore || loading) return;
+  // Toggle reaction (add or remove)
+  const toggleReaction = async (
+    photoId: string,
+    reactionType: 'heart' | 'fire' | 'hundred'
+  ): Promise<boolean> => {
+    // Check rate limit
+    if (!reactionLimiter.tryAcquire()) {
+      console.log('⏱️ Rate limit hit for reactions');
+      return false;
+    }
 
     try {
-      setLoading(true);
-      const nextPage = page + 1;
-      const newPhotos = await PhotoService.getByEventIdPaginated(
-        eventId,
-        nextPage,
-        PHOTOS_PER_PAGE
+      // Optimistic update
+      const wasActive = userReactions.get(photoId)?.has(reactionType) || false;
+
+      setPhotos((prev) =>
+        prev.map((photo) => {
+          if (photo.id !== photoId) return photo;
+
+          const newReactions = { ...photo.reactions };
+          const currentCount = newReactions[reactionType] || 0;
+
+          if (wasActive) {
+            // Removing reaction
+            newReactions[reactionType] = Math.max(0, currentCount - 1);
+          } else {
+            // Adding reaction
+            newReactions[reactionType] = currentCount + 1;
+          }
+
+          return { ...photo, reactions: newReactions };
+        })
       );
 
-      if (newPhotos.length > 0) {
-        setPhotos((prev) => [...prev, ...newPhotos]);
-        setPage(nextPage);
-        setHasMore(newPhotos.length === PHOTOS_PER_PAGE);
-      } else {
-        setHasMore(false);
-      }
-    } catch (err) {
-      console.error('Failed to load more photos:', err);
-    } finally {
-      setLoading(false);
+      // Update userReactions optimistically
+      setUserReactions((prev) => {
+        const newMap = new Map(prev);
+        if (!newMap.has(photoId)) {
+          newMap.set(photoId, new Set());
+        }
+        const photoReactions = newMap.get(photoId)!;
+
+        if (wasActive) {
+          photoReactions.delete(reactionType);
+        } else {
+          photoReactions.add(reactionType);
+        }
+
+        return newMap;
+      });
+
+      // Call API
+      const { reactions: serverReactions, wasAdded } = await PhotoService.toggleReaction(
+        photoId,
+        reactionType
+      );
+
+      // Update with server truth
+      setPhotos((prev) =>
+        prev.map((photo) =>
+          photo.id === photoId ? { ...photo, reactions: serverReactions } : photo
+        )
+      );
+
+      return wasAdded;
+    } catch (error) {
+      console.error('Failed to toggle reaction:', error);
+      // Revert optimistic update on error
+      loadPhotos();
+      return false;
     }
   };
 
-  const refresh = async () => {
-    try {
-      const data = await PhotoService.getByEventIdPaginated(eventId, 0, PHOTOS_PER_PAGE);
-      setPhotos(data);
-      setHasMore(data.length === PHOTOS_PER_PAGE);
-      setPage(0);
-    } catch (err) {
-      console.error('Failed to refresh photos:', err);
-      setError(err as Error);
-    }
+  // Check if user has reacted
+  const hasUserReacted = (photoId: string, reactionType: 'heart' | 'fire' | 'hundred'): boolean => {
+    return userReactions.get(photoId)?.has(reactionType) || false;
   };
 
-  return { photos, loading, error, refresh, loadMore, hasMore };
+  return {
+    photos,
+    loading,
+    refreshPhotos: loadPhotos,
+    toggleReaction,
+    hasUserReacted,
+  };
 }

@@ -4,6 +4,7 @@ import { Heart, Flame } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { colors, spacing, typography, borderRadius } from '@/lib/design-tokens';
 import { ReactionsService } from '@/services/reactions';
+import { PhotoService } from '@/services/api';
 import type { Reactions } from '@/types';
 
 interface ReactionBarProps {
@@ -45,7 +46,7 @@ const ReactionBarComponent = ({ photoId, reactions, onReact }: ReactionBarProps)
   // OPTIMIZED: Memoized handler
   const handleReact = useCallback(async (reaction: 'heart' | 'fire' | 'hundred') => {
     if (isAnimating[reaction]) return;
-    
+
     setIsAnimating(prev => ({ ...prev, [reaction]: true }));
 
     // Animate button
@@ -68,17 +69,25 @@ const ReactionBarComponent = ({ photoId, reactions, onReact }: ReactionBarProps)
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    const isAdding = await ReactionsService.toggleReaction(photoId, reaction);
-    const currentCount = reactions[reaction] || 0;
-    const newCount = isAdding ? currentCount + 1 : Math.max(0, currentCount - 1);
+    try {
+      // Toggle via API
+      const { reactions: newReactions, wasAdded } = await PhotoService.toggleReaction(
+        photoId,
+        reaction
+      );
 
-    setActiveReactions((prev) => ({
-      ...prev,
-      [reaction]: isAdding,
-    }));
+      // Update active state based on server response
+      setActiveReactions((prev) => ({
+        ...prev,
+        [reaction]: wasAdded,
+      }));
 
-    onReact(reaction, newCount);
-  }, [photoId, reactions, onReact, isAnimating, scaleAnims]);
+      // Call parent with new counts
+      onReact(reaction, newReactions[reaction] || 0);
+    } catch (error) {
+      console.error('Failed to toggle reaction:', error);
+    }
+  }, [photoId, onReact, isAnimating, scaleAnims]);
 
   return (
     <View style={styles.container}>

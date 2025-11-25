@@ -31,6 +31,7 @@ import { PhotoService, LeaderboardService } from '@/services/api';
 import { NotificationService } from '@/services/notifications';
 import { SessionService } from '@/services/session';
 import { ReactionsService } from '@/services/reactions';
+import { RateLimiter } from '@/services/rate-limiter';
 import { RouteErrorBoundary } from '@/components/shared/RouteErrorBoundary';
 import { TooltipOverlay, shouldShowTooltip } from '@/components/shared/TooltipOverlay';
 import { EventExpirationBanner } from '@/components/event/EventExpirationBanner';
@@ -45,7 +46,7 @@ export default function EventFeedScreen() {
   const router = useRouter();
 
   const { event, tasks, loading: eventLoading } = useEvent(eventId);
-  const { photos, loading: photosLoading, refresh, loadMore, hasMore } = usePhotos(eventId);
+  const { photos, loading: photosLoading, refreshPhotos, toggleReaction, hasUserReacted } = usePhotos(eventId);
   const { submissions, completionRate } = usePlayer(playerId, eventId);
   const { unreadCount, refresh: refreshNotifications } = useNotifications(playerId);
   const { expoPushToken } = usePushNotifications(playerId);
@@ -61,13 +62,12 @@ export default function EventFeedScreen() {
     visible: boolean;
     step: 'tap_photo' | 'react_to_photo' | 'upload_photo' | null;
   }>({ visible: false, step: null });
-  const [photosViewed, setPhotosViewed] = useState(0); // ✅ Track photo views for context-aware tooltips
+  const [photosViewed, setPhotosViewed] = useState(0);
 
   useEffect(() => {
     setLocalPhotos(photos);
   }, [photos]);
 
-  // Refresh feed when screen comes into focus (e.g., after upload)
   useFocusEffect(
     React.useCallback(() => {
       console.log('🔄 Screen focused - refreshing data');
@@ -107,7 +107,6 @@ export default function EventFeedScreen() {
         const playerScore = newScores.find((s: PlayerScore) => s.player_id === playerId);
         if (playerScore) {
           if (previousRank !== null && playerScore.rank < previousRank) {
-            // Create rank change notification
             NotificationService.notifyRankChange(playerId, playerScore.rank);
 
             addActivity({
@@ -125,11 +124,9 @@ export default function EventFeedScreen() {
     }
   }, [eventId, photos, playerId]);
 
-  // Show tooltips for new players
   useEffect(() => {
     if (playerId && localPhotos.length > 0) {
       const checkTooltips = async () => {
-        // Check if should show "tap photo" tooltip
         const shouldShow = await shouldShowTooltip('tap_photo');
         if (shouldShow) {
           setTimeout(() => {
@@ -150,7 +147,7 @@ export default function EventFeedScreen() {
     console.log('🔄 Refreshing feed...');
 
     try {
-      await refresh();
+      await refreshPhotos();
       const newScores = await LeaderboardService.getScores(eventId);
       setScores(newScores);
 
@@ -171,53 +168,28 @@ export default function EventFeedScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedPhotoIndex(index);
 
-    // ✅ Track photo views for context-aware tooltip
     const newViewCount = photosViewed + 1;
     setPhotosViewed(newViewCount);
 
-    // ✅ Show upload tooltip after viewing 3 photos (natural discovery)
     if (newViewCount === 3 && playerId) {
       setTimeout(async () => {
         const shouldShow = await shouldShowTooltip('upload_photo');
         if (shouldShow) {
           setShowTooltip({ visible: true, step: 'upload_photo' });
         }
-      }, 2000); // Show 2 seconds after closing photo viewer
+      }, 2000);
     }
   };
 
   const handleReact = async (photoId: string, reaction: 'heart' | 'fire' | 'hundred') => {
     try {
-      // 1. Check if user already reacted (for toggle behavior)
-      const isAdding = await ReactionsService.toggleReaction(photoId, reaction);
-
-      // 2. Optimistically update UI immediately
-      setLocalPhotos((prev) =>
-        prev.map((photo) => {
-          if (photo.id !== photoId) return photo;
-
-          const currentCount = photo.reactions[reaction] || 0;
-          const newCount = isAdding ? currentCount + 1 : Math.max(0, currentCount - 1);
-
-          return {
-            ...photo,
-            reactions: {
-              ...photo.reactions,
-              [reaction]: newCount,
-            },
-          };
-        })
+      // Call API (which calls RPC)
+      const { reactions: serverReactions, wasAdded } = await PhotoService.toggleReaction(
+        photoId,
+        reaction
       );
 
-      // 3. Call RPC to get authoritative counts
-      let serverReactions: Reactions;
-      if (isAdding) {
-        serverReactions = await PhotoService.addReaction(photoId, reaction);
-      } else {
-        serverReactions = await PhotoService.removeReaction(photoId, reaction);
-      }
-
-      // 4. Replace with server counts (in case of race conditions)
+      // Update local state with server truth
       setLocalPhotos((prev) =>
         prev.map((photo) => {
           if (photo.id !== photoId) return photo;
@@ -228,8 +200,8 @@ export default function EventFeedScreen() {
         })
       );
 
-      // 5. Create notification for photo owner (if not self)
-      if (playerId && isAdding) {
+      // Create notification if adding (not removing)
+      if (playerId && wasAdded) {
         const photo = localPhotos.find((p) => p.id === photoId);
         if (photo && photo.player.id !== playerId) {
           const { supabase } = await import('@/lib/supabase');
@@ -250,16 +222,9 @@ export default function EventFeedScreen() {
         }
       }
     } catch (error) {
-      console.error('❌ Failed to sync reaction:', error);
-
-      // Revert optimistic update by fetching fresh data
-      try {
-        const freshPhotos = await PhotoService.getByEventId(eventId);
-        setLocalPhotos(freshPhotos);
-      } catch (fetchError) {
-        console.error('❌ Failed to fetch fresh data:', fetchError);
-        handleRefresh();
-      }
+      console.error('❌ Failed to toggle reaction:', error);
+      // Refresh on error
+      handleRefresh();
     }
   };
 
@@ -271,7 +236,6 @@ export default function EventFeedScreen() {
   const handleTaskSelect = async (task: any) => {
     setShowTaskPrompt(false);
 
-    // Get player name for celebration screen
     let playerNameToPass = '';
     if (playerId) {
       try {
@@ -329,7 +293,6 @@ export default function EventFeedScreen() {
 
   const handleTooltipDismiss = async () => {
     setShowTooltip({ visible: false, step: null });
-    // ✅ No more sequential chaining! Tooltips now appear based on user actions
   };
 
   if (eventLoading || photosLoading) {
@@ -347,6 +310,7 @@ export default function EventFeedScreen() {
     );
   }
 
+  const isEventClosed = event?.closed_at != null;
   const completedTaskIds = submissions.map((s) => s.task_id);
   const playerScore = playerId ? scores.find((s) => s.player_id === playerId) : null;
   const nextPlayerScore = playerScore
@@ -377,8 +341,6 @@ export default function EventFeedScreen() {
             <View style={styles.headerTop}>
               <Text style={styles.eventTitle}>{event.title}</Text>
               <View style={styles.headerActions}>
-
-                {/* End Event button - added */}
                 {playerId && event.owner_id === playerId && (
                   <TouchableOpacity onPress={handleEndEvent} style={{ marginRight: spacing.s }}>
                     <Text style={{ ...typography.body, color: colors.primary }}>End Event</Text>
@@ -398,7 +360,6 @@ export default function EventFeedScreen() {
             </View>
           </View>
 
-          {/* Event Expiration Countdown */}
           {event?.created_at && (
             <EventExpirationBanner createdAt={event.created_at} />
           )}
@@ -418,8 +379,6 @@ export default function EventFeedScreen() {
             <PhotoGrid
               photos={localPhotos}
               onPhotoPress={handlePhotoPress}
-              onLoadMore={loadMore}
-              hasMore={hasMore}
               loading={photosLoading}
             />
           ) : (
@@ -429,11 +388,9 @@ export default function EventFeedScreen() {
               actionLabel={playerId ? "Upload First Photo" : undefined}
             />
           )}
-
-          <View style={{ height: 100 }} />
         </ScrollView>
 
-        {playerId && (
+        {playerId && !isEventClosed && (
           <View style={styles.footer}>
             <Button
               onPress={handleUploadPress}
@@ -444,6 +401,14 @@ export default function EventFeedScreen() {
             >
               Upload Photo
             </Button>
+          </View>
+        )}
+
+        {isEventClosed && (
+          <View style={styles.closedBanner}>
+            <Text style={styles.closedText}>
+              🏁 Event Ended - No more uploads allowed
+            </Text>
           </View>
         )}
 
@@ -476,7 +441,6 @@ export default function EventFeedScreen() {
           />
         </Modal>
 
-        {/* Tooltip Overlay */}
         {showTooltip.visible && showTooltip.step && (
           <TooltipOverlay
             step={showTooltip.step}
@@ -499,7 +463,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingTop: 60,
-    paddingBottom: 20,
+    paddingBottom: 120, // ← Increased from 20 to 120
   },
   header: {
     paddingHorizontal: spacing.m,
@@ -529,6 +493,28 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backgroundLight,
     borderTopWidth: 1,
     borderTopColor: colors.surfaceLight,
+    // ← Added shadow for visual distinction
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  closedBanner: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: spacing.m,
+    backgroundColor: colors.surfaceLight,
+    borderTopWidth: 1,
+    borderTopColor: colors.surfaceLight,
+    alignItems: 'center',
+  },
+  closedText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   errorContainer: {
     flex: 1,

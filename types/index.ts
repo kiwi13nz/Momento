@@ -7,6 +7,7 @@ export type Event = {
   description: string;
   owner_id: string;
   created_at: string;
+  closed_at?: string | null;
 };
 
 export type Task = {
