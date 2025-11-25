@@ -7,7 +7,7 @@ export default {
     icon: "./assets/images/icon.png",
     scheme: "flick",
     userInterfaceStyle: "dark",
-    newArchEnabled: true,
+    //newArchEnabled: true,
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.flick.app"

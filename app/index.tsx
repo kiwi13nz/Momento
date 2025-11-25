@@ -19,6 +19,8 @@ import { getOwnerEvents, type OwnerEvent } from '@/lib/storage';
 import { SessionService, type PlayerSession } from '@/services/session';
 import { useFadeIn, useSlideUp } from '@/lib/animations';
 import { RouteErrorBoundary } from '@/components/shared/RouteErrorBoundary';
+import { EventSessionCard } from '@/components/home/EventSessionCard';
+import { OwnerEventCard } from '@/components/home/OwnerEventCard';
 
 const { width } = Dimensions.get('window');
 
@@ -129,32 +131,11 @@ export default function HomeScreen() {
             <Text style={styles.sectionSubtitle}>Continue where you left off</Text>
             <View style={styles.eventsList}>
               {playerSessions.map((session) => (
-                <Card
+                <EventSessionCard
                   key={session.eventId}
-                  style={styles.sessionCard}
-                  pressable
+                  session={session}
                   onPress={() => handleSessionPress(session)}
-                >
-                  <View style={styles.sessionCardContent}>
-                    <View style={styles.sessionCardLeft}>
-                      <View style={styles.sessionAvatar}>
-                        <Text style={styles.sessionAvatarText}>
-                          {session.playerName.charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                      <View style={styles.sessionInfo}>
-                        <Text style={styles.sessionPlayerName}>{session.playerName}</Text>
-                        <Text style={styles.sessionEventId}>
-                          Event: {session.eventId.substring(0, 8)}...
-                        </Text>
-                        <Text style={styles.sessionDate}>
-                          Joined {new Date(session.joinedAt).toLocaleDateString()}
-                        </Text>
-                      </View>
-                    </View>
-                    <Play size={24} color={colors.primary} fill={colors.primary} />
-                  </View>
-                </Card>
+                />
               ))}
             </View>
           </View>
@@ -167,20 +148,11 @@ export default function HomeScreen() {
             <Text style={styles.sectionSubtitle}>Events you created</Text>
             <View style={styles.eventsList}>
               {ownerEvents.map((event) => (
-                <Card
+                <OwnerEventCard
                   key={event.eventId}
-                  style={styles.eventCard}
-                  pressable
+                  event={event}
                   onPress={() => handleEventPress(event)}
-                >
-                  <View style={styles.eventCardContent}>
-                    <View style={styles.eventCardLeft}>
-                      <Text style={styles.eventCardTitle}>{event.title}</Text>
-                      <Text style={styles.eventCardCode}>Code: {event.eventCode}</Text>
-                    </View>
-                    <ChevronRight size={24} color={colors.textSecondary} />
-                  </View>
-                </Card>
+                />
               ))}
             </View>
           </View>

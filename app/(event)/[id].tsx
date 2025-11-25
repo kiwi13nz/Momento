@@ -33,7 +33,8 @@ import { SessionService } from '@/services/session';
 import { ReactionsService } from '@/services/reactions';
 import { RouteErrorBoundary } from '@/components/shared/RouteErrorBoundary';
 import { TooltipOverlay, shouldShowTooltip } from '@/components/shared/TooltipOverlay';
-import type { Photo, PlayerScore } from '@/types';
+import { EventExpirationBanner } from '@/components/event/EventExpirationBanner';
+import type { Photo, PlayerScore, Reactions } from '@/types';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { Alert } from 'react-native';
 
@@ -60,6 +61,7 @@ export default function EventFeedScreen() {
     visible: boolean;
     step: 'tap_photo' | 'react_to_photo' | 'upload_photo' | null;
   }>({ visible: false, step: null });
+  const [photosViewed, setPhotosViewed] = useState(0); // ✅ Track photo views for context-aware tooltips
 
   useEffect(() => {
     setLocalPhotos(photos);
@@ -78,7 +80,7 @@ export default function EventFeedScreen() {
       if (!playerId && eventId) {
         console.log('🔍 Checking for existing session...');
         const session = await SessionService.getSession(eventId);
-        
+
         if (session) {
           console.log('✅ Session found, restoring:', session.playerId);
           router.replace({
@@ -107,7 +109,7 @@ export default function EventFeedScreen() {
           if (previousRank !== null && playerScore.rank < previousRank) {
             // Create rank change notification
             NotificationService.notifyRankChange(playerId, playerScore.rank);
-            
+
             addActivity({
               id: `rank-${Date.now()}`,
               type: 'rank',
@@ -146,17 +148,17 @@ export default function EventFeedScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     console.log('🔄 Refreshing feed...');
-    
+
     try {
       await refresh();
       const newScores = await LeaderboardService.getScores(eventId);
       setScores(newScores);
-      
+
       if (playerId) {
         await refreshNotifications();
         console.log('✅ Notifications refreshed');
       }
-      
+
       console.log('✅ Feed refreshed successfully');
     } catch (error) {
       console.error('❌ Failed to refresh feed:', error);
@@ -168,22 +170,35 @@ export default function EventFeedScreen() {
   const handlePhotoPress = (photo: Photo, index: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedPhotoIndex(index);
+
+    // ✅ Track photo views for context-aware tooltip
+    const newViewCount = photosViewed + 1;
+    setPhotosViewed(newViewCount);
+
+    // ✅ Show upload tooltip after viewing 3 photos (natural discovery)
+    if (newViewCount === 3 && playerId) {
+      setTimeout(async () => {
+        const shouldShow = await shouldShowTooltip('upload_photo');
+        if (shouldShow) {
+          setShowTooltip({ visible: true, step: 'upload_photo' });
+        }
+      }, 2000); // Show 2 seconds after closing photo viewer
+    }
   };
 
   const handleReact = async (photoId: string, reaction: 'heart' | 'fire' | 'hundred') => {
     try {
-      // 1. OPTIMISTIC UPDATE - Update UI immediately
-      const isActive = ReactionsService.hasReacted(photoId, reaction);
-      
+      // 1. Check if user already reacted (for toggle behavior)
+      const isAdding = await ReactionsService.toggleReaction(photoId, reaction);
+
+      // 2. Optimistically update UI immediately
       setLocalPhotos((prev) =>
         prev.map((photo) => {
           if (photo.id !== photoId) return photo;
-          
+
           const currentCount = photo.reactions[reaction] || 0;
-          const newCount = isActive ? currentCount + 1 : Math.max(0, currentCount - 1);
-          
-          console.log(`⚡ Optimistic update: ${reaction} ${currentCount} → ${newCount}`);
-          
+          const newCount = isAdding ? currentCount + 1 : Math.max(0, currentCount - 1);
+
           return {
             ...photo,
             reactions: {
@@ -194,68 +209,55 @@ export default function EventFeedScreen() {
         })
       );
 
-      // 2. DATABASE UPDATE - Sync to backend
-      if (isActive) {
-        await PhotoService.addReaction(photoId, reaction);
-
-        // 3. CREATE NOTIFICATION for photo owner (if not self)
-        if (playerId) {
-          const photo = localPhotos.find((p) => p.id === photoId);
-          if (photo && photo.player.id !== playerId) {
-            console.log('🔔 Creating reaction notification for player:', photo.player.id);
-            
-            // Get current player name for notification
-            const { supabase } = await import('@/lib/supabase');
-            const { data: player } = await supabase
-              .from('players')
-              .select('name')
-              .eq('id', playerId)
-              .single();
-
-            if (player) {
-              // Use batched notification (max 1 per 2 minutes after first)
-              await NotificationService.notifyReaction(
-                photo.player.id,
-                player.name,
-                reaction,
-                photoId
-              );
-              console.log('✅ Reaction notification created');
-            }
-          }
-        }
+      // 3. Call RPC to get authoritative counts
+      let serverReactions: Reactions;
+      if (isAdding) {
+        serverReactions = await PhotoService.addReaction(photoId, reaction);
       } else {
-        // Reaction was removed - update DB
-        const photo = localPhotos.find((p) => p.id === photoId);
-        if (photo && photo.reactions[reaction] && photo.reactions[reaction]! > 0) {
-          const newCount = photo.reactions[reaction]! - 1;
-          const updatedReactions = {
-            ...photo.reactions,
-            [reaction]: newCount,
+        serverReactions = await PhotoService.removeReaction(photoId, reaction);
+      }
+
+      // 4. Replace with server counts (in case of race conditions)
+      setLocalPhotos((prev) =>
+        prev.map((photo) => {
+          if (photo.id !== photoId) return photo;
+          return {
+            ...photo,
+            reactions: serverReactions,
           };
-          
+        })
+      );
+
+      // 5. Create notification for photo owner (if not self)
+      if (playerId && isAdding) {
+        const photo = localPhotos.find((p) => p.id === photoId);
+        if (photo && photo.player.id !== playerId) {
           const { supabase } = await import('@/lib/supabase');
-          await supabase
-            .from('submissions')
-            .update({ reactions: updatedReactions })
-            .eq('id', photoId);
-          
-          console.log('✅ Reaction removed from DB');
+          const { data: player } = await supabase
+            .from('players')
+            .select('name')
+            .eq('id', playerId)
+            .single();
+
+          if (player) {
+            await NotificationService.notifyReaction(
+              photo.player.id,
+              player.name,
+              reaction,
+              photoId
+            );
+          }
         }
       }
     } catch (error) {
       console.error('❌ Failed to sync reaction:', error);
-      
-      // 4. REVERT OPTIMISTIC UPDATE on error
-      console.log('⏪ Reverting optimistic update due to error');
-      
-      // Fetch fresh data from DB to get correct state
+
+      // Revert optimistic update by fetching fresh data
       try {
         const freshPhotos = await PhotoService.getByEventId(eventId);
         setLocalPhotos(freshPhotos);
       } catch (fetchError) {
         console.error('❌ Failed to fetch fresh data:', fetchError);
-        // Last resort: trigger full refresh
         handleRefresh();
       }
     }
@@ -268,7 +270,7 @@ export default function EventFeedScreen() {
 
   const handleTaskSelect = async (task: any) => {
     setShowTaskPrompt(false);
-    
+
     // Get player name for celebration screen
     let playerNameToPass = '';
     if (playerId) {
@@ -285,11 +287,11 @@ export default function EventFeedScreen() {
         console.error('Failed to get player name:', error);
       }
     }
-    
+
     router.push({
       pathname: '/(event)/upload',
-      params: { 
-        eventId, 
+      params: {
+        eventId,
         playerId,
         playerName: playerNameToPass,
         taskId: task.id,
@@ -318,20 +320,17 @@ export default function EventFeedScreen() {
     });
   };
 
-  const handleTooltipDismiss = async () => {
-    setShowTooltip({ visible: false, step: null });
-    
-    // Show next tooltip after dismissal
-    if (showTooltip.step === 'tap_photo') {
-      const shouldShow = await shouldShowTooltip('upload_photo');
-      if (shouldShow) {
-        setTimeout(() => {
-          setShowTooltip({ visible: true, step: 'upload_photo' });
-        }, 500);
-      }
-    }
+  const handleEndEvent = () => {
+    router.push({
+      pathname: '/(event)/winner',
+      params: { eventId, eventTitle: event?.title },
+    });
   };
 
+  const handleTooltipDismiss = async () => {
+    setShowTooltip({ visible: false, step: null });
+    // ✅ No more sequential chaining! Tooltips now appear based on user actions
+  };
 
   if (eventLoading || photosLoading) {
     return <LoadingState message="Loading event..." />;
@@ -378,8 +377,13 @@ export default function EventFeedScreen() {
             <View style={styles.headerTop}>
               <Text style={styles.eventTitle}>{event.title}</Text>
               <View style={styles.headerActions}>
-                
-{/* End Event button - coming in winner screen feature */}
+
+                {/* End Event button - added */}
+                {playerId && event.owner_id === playerId && (
+                  <TouchableOpacity onPress={handleEndEvent} style={{ marginRight: spacing.s }}>
+                    <Text style={{ ...typography.body, color: colors.primary }}>End Event</Text>
+                  </TouchableOpacity>
+                )}
 
                 {playerId && (
                   <NotificationBell
@@ -394,6 +398,11 @@ export default function EventFeedScreen() {
             </View>
           </View>
 
+          {/* Event Expiration Countdown */}
+          {event?.created_at && (
+            <EventExpirationBanner createdAt={event.created_at} />
+          )}
+
           {playerId && playerScore && (
             <ProgressHeader
               completedTasks={submissions.length}
@@ -406,8 +415,8 @@ export default function EventFeedScreen() {
           {scores.length > 0 && <Podium scores={scores} />}
 
           {localPhotos.length > 0 ? (
-            <PhotoGrid 
-              photos={localPhotos} 
+            <PhotoGrid
+              photos={localPhotos}
               onPhotoPress={handlePhotoPress}
               onLoadMore={loadMore}
               hasMore={hasMore}

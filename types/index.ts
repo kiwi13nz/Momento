@@ -25,10 +25,12 @@ export type Player = {
 
 export type Reaction = 'heart' | 'fire' | 'hundred';
 
+// app/types.ts
 export type Reactions = {
   heart?: number;
   fire?: number;
   hundred?: number;
+  [key: string]: number | undefined;
 };
 
 export type Submission = {

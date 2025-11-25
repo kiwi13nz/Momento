@@ -173,6 +173,7 @@ export const PhotoService = {
     if (taskIds.length === 0) return [];
 
     // Get all submissions for these tasks
+    const { supabase } = await import('@/lib/supabase');
     const { data: submissions, error } = await supabase
       .from('submissions')
       .select('*')
@@ -208,29 +209,31 @@ export const PhotoService = {
     return photos;
   },
 
-
   async checkDuplicateSubmission(playerId: string, taskId: string): Promise<boolean> {
-  const { data } = await supabase
-    .from('submissions')
-    .select('id')
-    .eq('player_id', playerId)
-    .eq('task_id', taskId)
-    .maybeSingle();
+    const { supabase } = await import('@/lib/supabase');
+    const { data } = await supabase
+      .from('submissions')
+      .select('id')
+      .eq('player_id', playerId)
+      .eq('task_id', taskId)
+      .maybeSingle();
 
-  return !!data;
-},
+    return !!data;
+  },
 
-async deleteSubmission(playerId: string, taskId: string): Promise<void> {
-  const { error } = await supabase
-    .from('submissions')
-    .delete()
-    .eq('player_id', playerId)
-    .eq('task_id', taskId);
+  async deleteSubmission(playerId: string, taskId: string): Promise<void> {
+    const { supabase } = await import('@/lib/supabase');
+    const { error } = await supabase
+      .from('submissions')
+      .delete()
+      .eq('player_id', playerId)
+      .eq('task_id', taskId);
 
-  if (error) throw error;
-},
+    if (error) throw error;
+  },
 
   async upload(taskId: string, playerId: string, photoUrl: string) {
+    const { supabase } = await import('@/lib/supabase');
     const { data, error } = await supabase
       .from('submissions')
       .insert({
@@ -259,6 +262,7 @@ async deleteSubmission(playerId: string, taskId: string): Promise<void> {
 
     // Get paginated submissions for these tasks
     const offset = page * limit;
+    const { supabase } = await import('@/lib/supabase');
     const { data: submissions, error } = await supabase
       .from('submissions')
       .select('*')
@@ -295,30 +299,52 @@ async deleteSubmission(playerId: string, taskId: string): Promise<void> {
     return photos;
   },
 
-  async addReaction(submissionId: string, reactionType: 'heart' | 'fire' | 'hundred') {
-    // Get current submission
-    const { data: submission } = await supabase
-      .from('submissions')
-      .select('reactions')
-      .eq('id', submissionId)
-      .single();
+  /**
+   * Add reaction via secure RPC
+   * Returns updated reaction counts (server authoritative)
+   */
+  async addReaction(
+    submissionId: string,
+    reactionType: 'heart' | 'fire' | 'hundred'
+  ): Promise<Reactions> {
+    const { supabase } = await import('@/lib/supabase');
+    const { data, error } = await supabase.rpc('add_reaction', {
+      p_submission_id: submissionId,
+      p_reaction_type: reactionType,
+    });
 
-    const currentReactions = (submission?.reactions as Reactions) || {};
-    const newCount = (currentReactions[reactionType] || 0) + 1;
-    const updatedReactions = {
-      ...currentReactions,
-      [reactionType]: newCount,
-    };
+    if (error) {
+      console.error('Failed to add reaction:', error);
+      throw error;
+    }
 
-    const { error } = await supabase
-      .from('submissions')
-      .update({ reactions: updatedReactions })
-      .eq('id', submissionId);
+    return (data || {}) as Reactions;
+  },
 
-    if (error) throw error;
+  /**
+   * Remove reaction via secure RPC
+   * Returns updated reaction counts (server authoritative)
+   */
+  async removeReaction(
+    submissionId: string,
+    reactionType: 'heart' | 'fire' | 'hundred'
+  ): Promise<Reactions> {
+    const { supabase } = await import('@/lib/supabase');
+    const { data, error } = await supabase.rpc('remove_reaction', {
+      p_submission_id: submissionId,
+      p_reaction_type: reactionType,
+    });
+
+    if (error) {
+      console.error('Failed to remove reaction:', error);
+      throw error;
+    }
+
+    return (data || {}) as Reactions;
   },
 
   async getPlayerSubmissions(playerId: string, taskIds: string[]) {
+    const { supabase } = await import('@/lib/supabase');
     const { data, error } = await supabase
       .from('submissions')
       .select('*')

@@ -39,9 +39,9 @@ export default function CreateEventScreen() {
   const [loading, setLoading] = useState(false);
   const [titleError, setTitleError] = useState('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [createdEvent, setCreatedEvent] = useState<{ 
-    id: string; 
-    code: string; 
+  const [createdEvent, setCreatedEvent] = useState<{
+    id: string;
+    code: string;
     title: string;
     ownerId: string;
   } | null>(null);
@@ -105,7 +105,7 @@ export default function CreateEventScreen() {
           .select('id')
           .eq('code', eventCode)
           .single();
-        
+
         codeExists = !!data;
         if (codeExists) {
           eventCode = generateEventCode();
@@ -178,7 +178,7 @@ export default function CreateEventScreen() {
       console.error('Create event failed:', error);
       Alert.alert('Error', 'Failed to create event. Please try again.');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      
+
       // Log error to analytics
       AnalyticsService.logError(error as Error, {
         context: 'create_event',
@@ -315,6 +315,7 @@ export default function CreateEventScreen() {
                 code: createdEvent.code,
               },
             });
+
           }}
         />
       )}

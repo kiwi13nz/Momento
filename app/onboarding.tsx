@@ -13,10 +13,9 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, typography, borderRadius, shadows } from '@/lib/design-tokens';
 import { Button } from '@/components/ui/Button';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { OnboardingService } from '@/services/onboarding';
 
 const { width, height } = Dimensions.get('window');
-const ONBOARDING_KEY = '@has_seen_onboarding';
 
 type SlideData = {
   icon: any;
@@ -96,8 +95,7 @@ export default function OnboardingScreen() {
 
   const completeOnboarding = async () => {
     try {
-      await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
-      console.log('✅ Onboarding completed and saved');
+      await OnboardingService.completeOnboarding();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace('/');
     } catch (error) {
@@ -348,9 +346,9 @@ function ReactionsAnimation() {
             >
               {Icon ? (
                 <View style={styles.reactionIconContainer}>
-                  <Icon 
-                    size={48} 
-                    color={reaction.color} 
+                  <Icon
+                    size={48}
+                    color={reaction.color}
                     fill={reaction.fill ? reaction.color : 'transparent'}
                     strokeWidth={2}
                   />
@@ -553,25 +551,3 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
 });
-
-// Export function to check onboarding status
-export async function hasSeenOnboarding(): Promise<boolean> {
-  try {
-    const value = await AsyncStorage.getItem(ONBOARDING_KEY);
-    console.log('📖 Checking onboarding status:', value);
-    return value === 'true';
-  } catch (error) {
-    console.error('Failed to check onboarding:', error);
-    return false;
-  }
-}
-
-// Export function to reset onboarding (for testing)
-export async function resetOnboarding(): Promise<void> {
-  try {
-    await AsyncStorage.removeItem(ONBOARDING_KEY);
-    console.log('🗑️ Onboarding reset');
-  } catch (error) {
-    console.error('Failed to reset onboarding:', error);
-  }
-}

@@ -20,7 +20,7 @@ const PHOTO_SIZE = (width - SPACING * (COLUMN_COUNT + 1)) / COLUMN_COUNT;
 const PhotoGridComponent = ({ photos, onPhotoPress, onLoadMore, hasMore = false, loading = false }: PhotoGridProps) => {
   const renderReactions = (photo: Photo) => {
     const reactions = [];
-    
+
     if (photo.reactions.heart && photo.reactions.heart > 0) {
       reactions.push({ emoji: '❤️', count: photo.reactions.heart });
     }
@@ -52,8 +52,12 @@ const PhotoGridComponent = ({ photos, onPhotoPress, onLoadMore, hasMore = false,
       onPress={() => onPhotoPress(item, index)}
       activeOpacity={0.8}
     >
-      <Image source={{ uri: item.photo_url }} style={styles.photo} />
-      
+      <Image
+        source={{ uri: item.photo_url }}  // ← CORRECT
+        style={styles.photo}
+        resizeMode="cover"
+      />
+
       <View style={styles.bottomOverlay}>
         <Text style={styles.playerName} numberOfLines={1}>
           {item.player.name}
@@ -116,7 +120,7 @@ const styles = StyleSheet.create({
   photo: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
+    // resizeMode removed from here
   },
   bottomOverlay: {
     position: 'absolute',

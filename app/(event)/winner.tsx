@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Share, Animated } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Trophy, Share2, Camera } from 'lucide-react-native';
+import { Trophy, Share2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, typography, borderRadius } from '@/lib/design-tokens';
@@ -14,7 +14,7 @@ export default function WinnerScreen() {
   const eventId = params.eventId as string;
   const eventTitle = params.eventTitle as string;
   const router = useRouter();
-  
+
   const [winner, setWinner] = useState<PlayerScore | null>(null);
   const [topThree, setTopThree] = useState<PlayerScore[]>([]);
   const [confettiAnim] = useState(new Animated.Value(0));
@@ -32,7 +32,7 @@ export default function WinnerScreen() {
 
   const startCelebration = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    
+
     Animated.spring(confettiAnim, {
       toValue: 1,
       tension: 50,
@@ -121,13 +121,24 @@ export default function WinnerScreen() {
           >
             Share Results
           </Button>
-          
+
           <Button
             onPress={() => router.back()}
             variant="ghost"
             fullWidth
           >
             Back to Event
+          </Button>
+
+          <Button
+            onPress={() => router.push({
+              pathname: '/(event)/recap',
+              params: { eventId }
+            })}
+            variant="primary"
+            fullWidth
+          >
+            View Event Recap
           </Button>
         </View>
       </Animated.View>

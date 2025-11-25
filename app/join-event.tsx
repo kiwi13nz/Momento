@@ -22,6 +22,7 @@ import { TouchableOpacity } from 'react-native';
 import { RouteErrorBoundary } from '@/components/shared/RouteErrorBoundary';
 import type { Event, Photo } from '@/types';
 import { AnalyticsService, Events } from '@/services/analytics';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 export default function JoinEventScreen() {
   const router = useRouter();
@@ -37,6 +38,7 @@ export default function JoinEventScreen() {
     recentPhotos: Photo[];
   } | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const { expoPushToken } = usePushNotifications(null); // Get device token for registration
 
   const formatCode = (text: string) => {
     return text.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
@@ -100,79 +102,86 @@ export default function JoinEventScreen() {
   };
 
   const joinEvent = async () => {
-  if (!playerName.trim()) {
-    setNameError('Enter your name');
-    return;
-  }
-
-  if (!eventPreview) return;
-
-  setLoading(true);
-  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-  try {
-    // Check for duplicate name
-    const nameExists = await PlayerService.checkNameExists(
-      eventPreview.event.id,
-      playerName.trim()
-    );
-    if (nameExists) {
-      setNameError('Name already taken');
-      setLoading(false);
+    if (!playerName.trim()) {
+      setNameError('Enter your name');
       return;
     }
 
-    // Create session with invisible auth
-    const session = await SessionService.createSession(
-      eventPreview.event.id,
-      playerName.trim()
-    );
-    
-    // Set user context for error tracking
-    AnalyticsService.setUser(session.playerId, {
-      playerName: playerName.trim(),
-      eventId: eventPreview.event.id,
-    });
+    if (!eventPreview) return;
 
-    // Track successful join
-    AnalyticsService.trackEvent(Events.USER_JOINED, {
-      eventId: eventPreview.event.id,
-      eventTitle: eventPreview.event.title,
-      playerCount: eventPreview.playerCount + 1,
-    });
+    setLoading(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    try {
+      // Check for duplicate name
+      const nameExists = await PlayerService.checkNameExists(
+        eventPreview.event.id,
+        playerName.trim()
+      );
+      if (nameExists) {
+        setNameError('Name already taken');
+        setLoading(false);
+        return;
+      }
 
-    // Navigate to feed
-    router.replace({
-      pathname: '/(event)/[id]',
-      params: {
-        id: eventPreview.event.id,
-        playerId: session.playerId,
-      },
-    });
-  } catch (error) {
-    console.error('Join failed:', error);
-    
-    // Log error to Sentry
-    AnalyticsService.logError(error as Error, {
-      eventCode,
-      playerName,
-      screen: 'join-event',
-    });
-    
-    // Track failed join
-    AnalyticsService.trackEvent(Events.JOIN_FAILED, {
-      error: (error as Error).message,
-      eventCode,
-    });
-    
-    Alert.alert('Error', 'Failed to join event');
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-  } finally {
-    setLoading(false);
-  }
-};
+      // Create session with invisible auth
+      const session = await SessionService.createSession(
+        eventPreview.event.id,
+        playerName.trim()
+      );
+
+      // Set user context for error tracking
+      AnalyticsService.setUser(session.playerId, {
+        playerName: playerName.trim(),
+        eventId: eventPreview.event.id,
+      });
+
+      // Track successful join
+      AnalyticsService.trackEvent(Events.USER_JOINED, {
+        eventId: eventPreview.event.id,
+        eventTitle: eventPreview.event.title,
+        playerCount: eventPreview.playerCount + 1,
+      });
+
+      // Register push notification token
+      if (expoPushToken) {
+        const { PushNotificationService } = await import('@/services/push-notifications');
+        await PushNotificationService.savePushToken(session.playerId, expoPushToken);
+        console.log('✅ Push token registered for player');
+      }
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // Navigate to feed
+      router.replace({
+        pathname: '/(event)/[id]',
+        params: {
+          id: eventPreview.event.id,
+          playerId: session.playerId,
+        },
+      });
+    } catch (error) {
+      console.error('Join failed:', error);
+
+      // Log error to Sentry
+      AnalyticsService.logError(error as Error, {
+        eventCode,
+        playerName,
+        screen: 'join-event',
+      });
+
+      // Track failed join
+      AnalyticsService.trackEvent(Events.JOIN_FAILED, {
+        error: (error as Error).message,
+        eventCode,
+      });
+
+      Alert.alert('Error', 'Failed to join event');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <RouteErrorBoundary routeName="join-event">
