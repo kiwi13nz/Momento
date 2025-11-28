@@ -70,18 +70,6 @@ export default {
       eas: {
         projectId: "6cedf39b-a00c-4958-b616-398e53d05c80"
       }
-    },
-
-    hooks: {
-      postPublish: [
-        {
-          file: "sentry-expo/upload-sourcemaps",
-          config: {
-            organization: "flick-app-h3",
-            project: "flick-app"
-          }
-        }
-      ]
     }
   }
 };
