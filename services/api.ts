@@ -250,77 +250,125 @@ export const PhotoService = {
     page: number = 0,
     limit: number = 20
   ): Promise<Photo[]> {
-    // Get all tasks for this event
-    const tasks = await TaskService.getByEventId(eventId);
-    const taskIds = tasks.map((t) => t.id);
+    try {
+      console.log(`📸 Loading photos - page ${page}, limit ${limit}`);
 
-    if (taskIds.length === 0) return [];
+      // Get all tasks for this event
+      const tasks = await TaskService.getByEventId(eventId);
+      const taskIds = tasks.map((t) => t.id);
 
-    // Get paginated submissions for these tasks
-    const offset = page * limit;
-    const { data: submissions, error } = await supabase
-      .from('submissions')
-      .select('*')
-      .in('task_id', taskIds)
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1); // Supabase uses inclusive range
+      console.log(`📋 Found ${taskIds.length} tasks for event ${eventId}`);
 
-    if (error) throw error;
-    if (!submissions) return [];
+      if (taskIds.length === 0) {
+        console.log('⚠️ No tasks found, returning empty array');
+        return [];
+      }
 
-    // Enrich with player and task data
-    const photos = await Promise.all(
-      submissions.map(async (submission) => {
-        const player = await PlayerService.getById(submission.player_id);
-        const task = tasks.find((t) => t.id === submission.task_id);
+      // Get paginated submissions for these tasks
+      const offset = page * limit;
+      console.log(`📊 Fetching submissions with offset ${offset}, range ${offset}-${offset + limit - 1}`);
 
-        // Get aggregated reactions from photo_reactions table
-        const reactions = await this.getReactionCounts(submission.id);
+      const { data: submissions, error } = await supabase
+        .from('submissions')
+        .select('*')
+        .in('task_id', taskIds)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
 
-        return {
-          id: submission.id,
-          photo_url: submission.photo_url,
-          created_at: submission.created_at,
-          reactions,
-          player: {
-            id: player.id,
-            name: player.name,
-          },
-          task: {
-            id: task?.id || '',
-            description: task?.description || '',
-          },
-        } as Photo;
-      })
-    );
+      if (error) {
+        console.error('❌ Supabase error loading submissions:', error);
+        throw error;
+      }
 
-    return photos;
+      if (!submissions || submissions.length === 0) {
+        console.log('ℹ️ No submissions found for this page');
+        return [];
+      }
+
+      console.log(`✅ Loaded ${submissions.length} submissions`);
+
+      // Enrich with player and task data
+      const photos = await Promise.all(
+        submissions.map(async (submission) => {
+          try {
+            const player = await PlayerService.getById(submission.player_id);
+            const task = tasks.find((t) => t.id === submission.task_id);
+
+            // Get aggregated reactions from photo_reactions table
+            const reactions = await this.getReactionCounts(submission.id);
+
+            return {
+              id: submission.id,
+              photo_url: submission.photo_url,
+              created_at: submission.created_at,
+              reactions,
+              player: {
+                id: player.id,
+                name: player.name,
+              },
+              task: {
+                id: task?.id || '',
+                description: task?.description || '',
+              },
+            } as Photo;
+          } catch (enrichError) {
+            console.error('❌ Failed to enrich photo:', submission.id, enrichError);
+            // Return basic photo data even if enrichment fails
+            return {
+              id: submission.id,
+              photo_url: submission.photo_url,
+              created_at: submission.created_at,
+              reactions: {},
+              player: {
+                id: submission.player_id,
+                name: 'Unknown',
+              },
+              task: {
+                id: submission.task_id,
+                description: 'Unknown',
+              },
+            } as Photo;
+          }
+        })
+      );
+
+      console.log(`✅ Returning ${photos.length} enriched photos`);
+      return photos;
+    } catch (error) {
+      console.error('❌ Failed to load paginated photos:', error);
+      return [];
+    }
   },
 
   /**
    * Get aggregated reaction counts for a photo from photo_reactions table
    */
   async getReactionCounts(submissionId: string): Promise<Reactions> {
-    const { data, error } = await supabase
-      .from('photo_reactions')
-      .select('reaction_type')
-      .eq('submission_id', submissionId);
+    try {
+      const { data, error } = await supabase
+        .from('photo_reactions')
+        .select('reaction_type')
+        .eq('submission_id', submissionId);
 
-    if (error) {
-      console.error('Failed to get reaction counts:', error);
+      if (error) {
+        console.error('Failed to get reaction counts:', error);
+        return {};
+      }
+
+      if (!data || data.length === 0) return {};
+
+      // Aggregate counts
+      const counts: Reactions = {};
+      data.forEach((row) => {
+        const type = row.reaction_type as 'heart' | 'fire' | 'hundred';
+        counts[type] = (counts[type] || 0) + 1;
+      });
+
+      return counts;
+    } catch (error) {
+      console.error('❌ Exception in getReactionCounts:', error);
       return {};
     }
-
-    if (!data || data.length === 0) return {};
-
-    // Aggregate counts
-    const counts: Reactions = {};
-    data.forEach((row) => {
-      const type = row.reaction_type as 'heart' | 'fire' | 'hundred';
-      counts[type] = (counts[type] || 0) + 1;
-    });
-
-    return counts;
   },
 
   async checkDuplicateSubmission(playerId: string, taskId: string): Promise<boolean> {
@@ -368,11 +416,19 @@ export const PhotoService = {
     submissionId: string,
     reactionType: 'heart' | 'fire' | 'hundred'
   ): Promise<{ reactions: Reactions; wasAdded: boolean }> {
-    // Check if user already reacted (for determining wasAdded state)
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      throw new Error('User must be authenticated to react');
+    }
+
+    // Check if CURRENT USER already reacted (for determining wasAdded state)
     const { data: existing } = await supabase
       .from('photo_reactions')
       .select('id')
       .eq('submission_id', submissionId)
+      .eq('user_id', user.id)
       .eq('reaction_type', reactionType)
       .maybeSingle();
 
@@ -418,10 +474,19 @@ export const PhotoService = {
   async getUserReactions(submissionIds: string[]): Promise<Map<string, Set<string>>> {
     if (submissionIds.length === 0) return new Map();
 
+    // Get current authenticated user
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      console.log('⚠️ No authenticated user, returning empty reactions map');
+      return new Map();
+    }
+
     const { data, error } = await supabase
       .from('photo_reactions')
       .select('submission_id, reaction_type')
-      .in('submission_id', submissionIds);
+      .in('submission_id', submissionIds)
+      .eq('user_id', user.id);
 
     if (error) {
       console.error('Failed to get user reactions:', error);
@@ -566,27 +631,41 @@ export const LeaderboardService = {
 
 export const StorageService = {
   async uploadPhoto(eventId: string, playerId: string, uri: string): Promise<string> {
-    const response = await fetch(uri);
-    const blob = await response.blob();
+  const response = await fetch(uri);
+  let blob = await response.blob();
+  
+  console.log('🔍 Original blob type:', blob.type);
+  console.log('🔍 Original blob size:', blob.size);
 
-    const fileExt = uri.split('.').pop() || 'jpg';
-    const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
-    const filePath = `${eventId}/${playerId}/${fileName}`;
+  const fileExt = uri.includes('blob:') ? 'jpg' : (uri.split('.').pop() || 'jpg');
+  let contentType = blob.type;
 
-    const { error: uploadError } = await supabase.storage
-      .from('submissions')
-      .upload(filePath, blob, {
-        contentType: `image/${fileExt}`,
-        cacheControl: '3600',
-        upsert: false,
-      });
+  // Fix MIME type if needed
+  if (!blob.type || !blob.type.startsWith('image/')) {
+    console.log('🔧 Fixing blob MIME type...');
+    contentType = `image/${fileExt}`;
+  }
 
-    if (uploadError) throw uploadError;
+  const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+  const filePath = `${eventId}/${playerId}/${fileName}`;
 
-    const { data: urlData } = supabase.storage
-      .from('submissions')
-      .getPublicUrl(filePath);
+  // ✅ CRITICAL: Convert blob to ArrayBuffer for direct binary upload
+  const arrayBuffer = await blob.arrayBuffer();
 
-    return urlData.publicUrl;
-  },
+  const { error: uploadError } = await supabase.storage
+    .from('submissions')
+    .upload(filePath, arrayBuffer, {
+      contentType: contentType,
+      cacheControl: '3600',
+      upsert: false,
+    });
+
+  if (uploadError) throw uploadError;
+
+  const { data: urlData } = supabase.storage
+    .from('submissions')
+    .getPublicUrl(filePath);
+
+  return urlData.publicUrl;
+},
 };

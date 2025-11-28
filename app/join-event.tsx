@@ -67,37 +67,62 @@ export default function JoinEventScreen() {
   };
 
   const loadEventPreview = async () => {
-    if (!(await validateCode())) return;
+    console.log('🔍 Preview button clicked, code:', eventCode);
 
+    const isValid = await validateCode();
+    console.log('Validation result:', isValid);
+
+    if (!isValid) {
+      console.log('❌ Code validation failed');
+      return;
+    }
+
+    console.log('✅ Starting preview load...');
     setLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
+      console.log('📡 Fetching event...');
       const event = await EventService.getByCode(eventCode);
+      console.log('✅ Event found:', event.title);
+
+      console.log('📸 Fetching photos...');
       const photos = await PhotoService.getByEventId(event.id);
+      console.log('✅ Photos loaded:', photos.length);
+
       const recentPhotos = photos.slice(0, 5);
 
       // Get player count
+      console.log('👥 Fetching players...');
       const { data: players } = await supabase
         .from('players')
         .select('id')
         .eq('event_id', event.id);
+      console.log('✅ Players found:', players?.length || 0);
 
-      setEventPreview({
+      const previewData = {
         event,
         playerCount: players?.length || 0,
         photoCount: photos.length,
         recentPhotos,
-      });
+      };
+
+      console.log('💾 Setting preview data...');
+      setEventPreview(previewData);
       setShowPreview(true);
+      console.log('✅ Preview should now be visible!');
     } catch (error: any) {
+      console.error('❌ Preview failed:', error);
       if (error.message?.includes('not found')) {
         setCodeError('Event not found');
+        Alert.alert('Event Not Found', `No event found with code: ${eventCode}`);
       } else {
-        Alert.alert('Error', 'Failed to load event preview');
+        const errorMsg = error.message || error.toString() || 'Unknown error';
+        Alert.alert('Preview Failed', `Could not load preview: ${errorMsg}`);
       }
     } finally {
       setLoading(false);
+      console.log('🏁 Preview load finished');
     }
   };
 

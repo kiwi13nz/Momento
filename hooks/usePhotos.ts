@@ -12,23 +12,70 @@ export function usePhotos(eventId: string) {
   const [loading, setLoading] = useState(true);
   const [userReactions, setUserReactions] = useState<Map<string, Set<string>>>(new Map());
 
-  // Load photos
-  const loadPhotos = useCallback(async () => {
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // Load photos with pagination
+  const loadPhotos = useCallback(async (pageNum: number = 0, append: boolean = false) => {
     try {
-      setLoading(true);
-      const data = await PhotoService.getByEventId(eventId);
-      setPhotos(data);
+      if (!append) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      console.log(`📸 Loading photos - page ${pageNum}`);
+
+      // CHANGED: Use getByEventIdPaginated instead of getByEventId
+      const data = await PhotoService.getByEventIdPaginated(eventId, pageNum, 20);
+
+      // If we got less than 20 photos, we've reached the end
+      setHasMore(data.length === 20);
+
+      if (append) {
+        // Append to existing photos for infinite scroll
+        setPhotos((prev) => [...prev, ...data]);
+      } else {
+        // Replace photos (initial load or refresh)
+        setPhotos(data);
+      }
 
       // Load user's reactions for all photos
       const submissionIds = data.map((p) => p.id);
       const reactions = await PhotoService.getUserReactions(submissionIds);
-      setUserReactions(reactions);
+
+      if (append) {
+        // Merge with existing reactions
+        setUserReactions((prev) => {
+          const merged = new Map(prev);
+          reactions.forEach((value, key) => merged.set(key, value));
+          return merged;
+        });
+      } else {
+        setUserReactions(reactions);
+      }
+
+      setPage(pageNum);
     } catch (error) {
       console.error('Failed to load photos:', error);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }, [eventId]);
+
+  // Load more photos for infinite scroll
+  const loadMorePhotos = useCallback(async () => {
+    if (loadingMore || !hasMore) {
+      console.log('⏭️ Skipping load more - already loading or no more photos');
+      return;
+    }
+
+    const nextPage = page + 1;
+    console.log(`⬇️ Loading more photos - page ${nextPage}`);
+    await loadPhotos(nextPage, true);
+  }, [loadPhotos, page, hasMore, loadingMore]);
 
   // Subscribe to real-time updates (optimized)
   useEffect(() => {
@@ -192,7 +239,10 @@ export function usePhotos(eventId: string) {
   return {
     photos,
     loading,
+    loadingMore,        // ADD THIS
+    hasMore,            // ADD THIS
     refreshPhotos: loadPhotos,
+    loadMorePhotos,     // ADD THIS
     toggleReaction,
     hasUserReacted,
   };

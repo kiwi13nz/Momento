@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Clock, Play } from 'lucide-react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Clock, Play, Bell } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { colors, spacing, typography, borderRadius } from '@/lib/design-tokens';
 import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
 import type { PlayerSession } from '@/services/session';
 import { supabase } from '@/lib/supabase';
 
@@ -18,6 +17,7 @@ interface EventData {
     created_at: string;
 }
 
+// ✅ CORRECT EXPORT - Named export, not default
 export function EventSessionCard({ session, onPress }: EventSessionCardProps) {
     const [eventData, setEventData] = useState<EventData | null>(null);
     const [timeRemaining, setTimeRemaining] = useState('');
@@ -68,12 +68,12 @@ export function EventSessionCard({ session, onPress }: EventSessionCardProps) {
         };
 
         updateTimer();
-        const interval = setInterval(updateTimer, 60000); // Update every minute
+        const interval = setInterval(updateTimer, 60000);
 
         return () => clearInterval(interval);
     }, [eventData]);
 
-    // Fetch unread notifications count
+    // Fetch unread notifications count with real-time updates
     useEffect(() => {
         async function fetchUnreadCount() {
             try {
@@ -92,9 +92,36 @@ export function EventSessionCard({ session, onPress }: EventSessionCardProps) {
         }
 
         fetchUnreadCount();
+
+        // Subscribe to real-time notification changes
+        const channel = supabase
+            .channel(`event-session-notifs-${session.playerId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'notifications',
+                    filter: `player_id=eq.${session.playerId}`,
+                },
+                () => {
+                    fetchUnreadCount();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [session.playerId]);
 
     const handlePress = () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onPress();
+    };
+
+    const handleNotificationPress = (e: any) => {
+        e.stopPropagation();
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onPress();
     };
@@ -123,8 +150,21 @@ export function EventSessionCard({ session, onPress }: EventSessionCardProps) {
                 </View>
 
                 <View style={styles.rightSection}>
-                    {/* Notification badge - visual only, click anywhere opens event */}
-                    <Badge count={unreadCount} position="top-right" />
+                    {unreadCount > 0 && (
+                        <TouchableOpacity
+                            style={styles.notificationBell}
+                            onPress={handleNotificationPress}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                            <Bell size={20} color={colors.primary} fill={colors.primary} />
+                            <View style={styles.notificationBadge}>
+                                <Text style={styles.notificationBadgeText}>
+                                    {unreadCount > 99 ? '99+' : unreadCount}
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
+                    )}
+
                     <Play size={24} color={colors.primary} fill={colors.primary} />
                 </View>
             </View>
@@ -186,8 +226,35 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     rightSection: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.m,
+    },
+    notificationBell: {
         position: 'relative',
+        width: 32,
+        height: 32,
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    notificationBadge: {
+        position: 'absolute',
+        top: -4,
+        right: -4,
+        backgroundColor: colors.error,
+        borderRadius: 10,
+        minWidth: 18,
+        height: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 4,
+        borderWidth: 2,
+        borderColor: colors.surface,
+    },
+    notificationBadgeText: {
+        ...typography.small,
+        color: '#fff',
+        fontWeight: '700',
+        fontSize: 10,
     },
 });

@@ -7,23 +7,37 @@ export default {
     icon: "./assets/images/icon.png",
     scheme: "flick",
     userInterfaceStyle: "dark",
-    //newArchEnabled: true,
+
     ios: {
-      supportsTablet: true,
-      bundleIdentifier: "com.flick.app"
+      supportsTablet: false,
+      bundleIdentifier: "com.tullu.flick",
+      infoPlist: {
+        NSCameraUsageDescription: "Flick uses the camera to capture photos.",
+        NSPhotoLibraryUsageDescription: "Flick needs access to your photos to upload images.",
+        NSPhotoLibraryAddUsageDescription: "Flick saves edited or captured photos to your gallery."
+      }
     },
+
     android: {
-      package: "com.flick.app",
+      package: "com.tullu.flick",
       adaptiveIcon: {
         foregroundImage: "./assets/images/icon.png",
         backgroundColor: "#FF6B35"
-      }
+      },
+      permissions: [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "VIBRATE"
+      ]
     },
+
     web: {
       bundler: "metro",
-      output: "single",
+      output: "static",
       favicon: "./assets/images/favicon.png"
     },
+
     plugins: [
       "expo-router",
       "expo-font",
@@ -32,33 +46,39 @@ export default {
       [
         "expo-notifications",
         {
-          icon: "./assets/images/notification-icon.png", // Optional: custom notification icon
-          color: "#FF6B35",
+          icon: "./assets/images/icon.png",
+          color: "#FF6B35"
         }
       ],
       [
         "sentry-expo",
         {
-          organization: "your-org",
-          project: "flick-app",
+          organization: "flick-app-h3",
+          project: "flick-app"
         }
       ]
     ],
+
     experiments: {
       typedRoutes: true
     },
+
     extra: {
       supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
       supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
       sentryDsn: process.env.SENTRY_DSN,
+      eas: {
+        projectId: "6cedf39b-a00c-4958-b616-398e53d05c80"
+      }
     },
+
     hooks: {
       postPublish: [
         {
           file: "sentry-expo/upload-sourcemaps",
           config: {
-            organization: "your-org",
-            project: "flick-app",
+            organization: "flick-app-h3",
+            project: "flick-app"
           }
         }
       ]

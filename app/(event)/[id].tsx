@@ -1,3 +1,8 @@
+// FIXED: Event Feed Screen - Key changes:
+// 1. Pass hasUserReacted from usePhotos to PhotoStories
+// 2. Fix handleReact to properly await toggleReaction
+// 3. Improve error handling and logging
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -8,6 +13,7 @@ import {
   RefreshControl,
   ScrollView,
   Share as RNShare,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Camera, Share2 } from 'lucide-react-native';
@@ -30,14 +36,11 @@ import { Button } from '@/components/ui/Button';
 import { PhotoService, LeaderboardService } from '@/services/api';
 import { NotificationService } from '@/services/notifications';
 import { SessionService } from '@/services/session';
-import { ReactionsService } from '@/services/reactions';
-import { RateLimiter } from '@/services/rate-limiter';
 import { RouteErrorBoundary } from '@/components/shared/RouteErrorBoundary';
 import { TooltipOverlay, shouldShowTooltip } from '@/components/shared/TooltipOverlay';
 import { EventExpirationBanner } from '@/components/event/EventExpirationBanner';
-import type { Photo, PlayerScore, Reactions } from '@/types';
+import type { Photo, PlayerScore } from '@/types';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
-import { Alert } from 'react-native';
 
 export default function EventFeedScreen() {
   const params = useLocalSearchParams();
@@ -46,16 +49,23 @@ export default function EventFeedScreen() {
   const router = useRouter();
 
   const { event, tasks, loading: eventLoading } = useEvent(eventId);
-  const { photos, loading: photosLoading, refreshPhotos, toggleReaction, hasUserReacted } = usePhotos(eventId);
+  const {
+    photos,
+    loading: photosLoading,
+    loadingMore,
+    hasMore,
+    refreshPhotos,
+    loadMorePhotos,
+    toggleReaction,
+    hasUserReacted
+  } = usePhotos(eventId);
   const { submissions, completionRate } = usePlayer(playerId, eventId);
   const { unreadCount, refresh: refreshNotifications } = useNotifications(playerId);
   const { expoPushToken } = usePushNotifications(playerId);
 
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null);
-  const [showTaskPrompt, setShowTaskPrompt] = useState(false);
   const [scores, setScores] = useState<PlayerScore[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [localPhotos, setLocalPhotos] = useState<Photo[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [previousRank, setPreviousRank] = useState<number | null>(null);
   const [showTooltip, setShowTooltip] = useState<{
@@ -63,10 +73,6 @@ export default function EventFeedScreen() {
     step: 'tap_photo' | 'react_to_photo' | 'upload_photo' | null;
   }>({ visible: false, step: null });
   const [photosViewed, setPhotosViewed] = useState(0);
-
-  useEffect(() => {
-    setLocalPhotos(photos);
-  }, [photos]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -125,7 +131,7 @@ export default function EventFeedScreen() {
   }, [eventId, photos, playerId]);
 
   useEffect(() => {
-    if (playerId && localPhotos.length > 0) {
+    if (playerId && photos.length > 0) {
       const checkTooltips = async () => {
         const shouldShow = await shouldShowTooltip('tap_photo');
         if (shouldShow) {
@@ -136,7 +142,7 @@ export default function EventFeedScreen() {
       };
       checkTooltips();
     }
-  }, [playerId, localPhotos]);
+  }, [playerId, photos]);
 
   const addActivity = (activity: Activity) => {
     setActivities((prev) => [activity, ...prev.slice(0, 9)]);
@@ -181,87 +187,38 @@ export default function EventFeedScreen() {
     }
   };
 
-  const handleReact = async (photoId: string, reaction: 'heart' | 'fire' | 'hundred') => {
+  // FIXED: handleReact now properly returns boolean for PhotoStories
+  const handleReact = async (
+    photoId: string,
+    reaction: 'heart' | 'fire' | 'hundred'
+  ): Promise<boolean> => {
+    console.log(`🔄 Event feed handling reaction ${reaction} for photo ${photoId}`);
+
     try {
-      // Call API (which calls RPC)
-      const { reactions: serverReactions, wasAdded } = await PhotoService.toggleReaction(
-        photoId,
-        reaction
-      );
-
-      // Update local state with server truth
-      setLocalPhotos((prev) =>
-        prev.map((photo) => {
-          if (photo.id !== photoId) return photo;
-          return {
-            ...photo,
-            reactions: serverReactions,
-          };
-        })
-      );
-
-      // Create notification if adding (not removing)
-      if (playerId && wasAdded) {
-        const photo = localPhotos.find((p) => p.id === photoId);
-        if (photo && photo.player.id !== playerId) {
-          const { supabase } = await import('@/lib/supabase');
-          const { data: player } = await supabase
-            .from('players')
-            .select('name')
-            .eq('id', playerId)
-            .single();
-
-          if (player) {
-            await NotificationService.notifyReaction(
-              photo.player.id,
-              player.name,
-              reaction,
-              photoId
-            );
-          }
-        }
-      }
+      const wasAdded = await toggleReaction(photoId, reaction);
+      console.log(`✅ Reaction ${wasAdded ? 'added' : 'removed'} successfully`);
+      return wasAdded;
     } catch (error) {
-      console.error('❌ Failed to toggle reaction:', error);
-      // Refresh on error
-      handleRefresh();
+      console.error('❌ Failed to handle reaction in event feed:', error);
+      Alert.alert('Error', 'Failed to react. Please try again.');
+      throw error;
     }
   };
 
   const handleUploadPress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setShowTaskPrompt(true);
-  };
-
-  const handleTaskSelect = async (task: any) => {
-    setShowTaskPrompt(false);
-
-    let playerNameToPass = '';
-    if (playerId) {
-      try {
-        const { supabase } = await import('@/lib/supabase');
-        const { data: player } = await supabase
-          .from('players')
-          .select('name')
-          .eq('id', playerId)
-          .single();
-        playerNameToPass = player?.name || '';
-        console.log('✅ Player name fetched for upload:', playerNameToPass);
-      } catch (error) {
-        console.error('Failed to get player name:', error);
-      }
+    if (isEventClosed) {
+      Alert.alert('Event Ended', 'This event has closed. No new photos can be uploaded.');
+      return;
     }
 
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Navigate directly to upload screen (no task selection modal)
     router.push({
       pathname: '/(event)/upload',
       params: {
-        eventId,
+        id: eventId,
         playerId,
-        playerName: playerNameToPass,
-        taskId: task.id,
-        taskDescription: task.description,
-        eventCode: event?.code,
-        eventTitle: event?.title,
       },
     });
   };
@@ -375,11 +332,13 @@ export default function EventFeedScreen() {
 
           {scores.length > 0 && <Podium scores={scores} />}
 
-          {localPhotos.length > 0 ? (
+          {photos.length > 0 ? (
             <PhotoGrid
-              photos={localPhotos}
+              photos={photos}
               onPhotoPress={handlePhotoPress}
               loading={photosLoading}
+              onLoadMore={loadMorePhotos}
+              hasMore={hasMore}
             />
           ) : (
             <EmptyState
@@ -412,6 +371,7 @@ export default function EventFeedScreen() {
           </View>
         )}
 
+        {/* FIXED: PhotoStories now receives hasUserReacted callback */}
         {selectedPhotoIndex !== null && (
           <Modal
             visible={true}
@@ -419,27 +379,14 @@ export default function EventFeedScreen() {
             onRequestClose={() => setSelectedPhotoIndex(null)}
           >
             <PhotoStories
-              photos={localPhotos}
+              photos={photos}
               initialIndex={selectedPhotoIndex}
               onClose={() => setSelectedPhotoIndex(null)}
               onReact={handleReact}
+              hasUserReacted={hasUserReacted}
             />
           </Modal>
         )}
-
-        <Modal
-          visible={showTaskPrompt}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={() => setShowTaskPrompt(false)}
-        >
-          <TaskPrompt
-            tasks={tasks}
-            completedTaskIds={completedTaskIds}
-            onTaskSelect={handleTaskSelect}
-            onClose={() => setShowTaskPrompt(false)}
-          />
-        </Modal>
 
         {showTooltip.visible && showTooltip.step && (
           <TooltipOverlay
@@ -463,7 +410,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingTop: 60,
-    paddingBottom: 120, // ← Increased from 20 to 120
+    paddingBottom: 120,
   },
   header: {
     paddingHorizontal: spacing.m,
@@ -493,7 +440,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backgroundLight,
     borderTopWidth: 1,
     borderTopColor: colors.surfaceLight,
-    // ← Added shadow for visual distinction
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.3,

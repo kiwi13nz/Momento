@@ -1,3 +1,4 @@
+// lib/supabase.ts
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import 'react-native-url-polyfill/auto';
@@ -12,9 +13,15 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: false,
   },
+  global: {
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation',
+    },
+  },
 });
 
-// ✅ ADDED: Storage bucket constants
 export const STORAGE_BUCKETS = {
   SUBMISSIONS: 'submissions',
 } as const;

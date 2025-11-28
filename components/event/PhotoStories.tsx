@@ -20,20 +20,21 @@ interface PhotoStoriesProps {
   photos: Photo[];
   initialIndex: number;
   onClose: () => void;
-  onReact: (photoId: string, reaction: 'heart' | 'fire' | 'hundred') => void;
+  onReact: (photoId: string, reaction: 'heart' | 'fire' | 'hundred') => Promise<boolean>;
+  hasUserReacted: (photoId: string, reaction: 'heart' | 'fire' | 'hundred') => boolean;
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const STORY_DURATION = 15000;
 const DOUBLE_TAP_DELAY = 300;
 
-export function PhotoStories({ photos, initialIndex, onClose, onReact }: PhotoStoriesProps) {
+export function PhotoStories({ photos, initialIndex, onClose, onReact, hasUserReacted }: PhotoStoriesProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [progress, setProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [localPhotos, setLocalPhotos] = useState(photos);
   const [showHeartAnimation, setShowHeartAnimation] = useState(false);
-  
+
   const progressInterval = useRef<any>(null);
   const translateX = useRef(new Animated.Value(0)).current;
   const heartScale = useRef(new Animated.Value(0)).current;
@@ -85,12 +86,12 @@ export function PhotoStories({ photos, initialIndex, onClose, onReact }: PhotoSt
     }
   };
 
-  const handleDoubleTap = () => {
+  const handleDoubleTap = async () => {
     const now = Date.now();
     if (now - lastTap.current < DOUBLE_TAP_DELAY) {
       // Double tap detected - auto-like with heart
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      
+
       // Show heart animation
       setShowHeartAnimation(true);
       Animated.parallel([
@@ -127,8 +128,7 @@ export function PhotoStories({ photos, initialIndex, onClose, onReact }: PhotoSt
       });
 
       // Trigger heart reaction
-const currentCount = currentPhoto.reactions.heart || 0;
-handleReact('heart', currentCount + 1);
+      await handleReact('heart', 0); // Count not used
     }
     lastTap.current = now;
   };
@@ -172,23 +172,26 @@ handleReact('heart', currentCount + 1);
     }
   };
 
-  const handleReact = (reaction: 'heart' | 'fire' | 'hundred', newCount: number) => {
-  setLocalPhotos((prev) =>
-    prev.map((photo) =>
-      photo.id === currentPhoto.id
-        ? {
-            ...photo,
-            reactions: {
-              ...photo.reactions,
-              [reaction]: newCount,
-            },
-          }
-        : photo
-    )
-  );
+  // FIXED: handleReact now updates local state correctly
+  const handleReact = async (reaction: 'heart' | 'fire' | 'hundred', _newCount: number): Promise<boolean> => {
+    console.log(`📸 Reacting ${reaction} to photo ${currentPhoto.id}`);
 
-  onReact(currentPhoto.id, reaction);
-};
+    try {
+      // Call parent's onReact which returns boolean (wasAdded)
+      const wasAdded = await onReact(currentPhoto.id, reaction);
+
+      console.log(`✅ Reaction ${wasAdded ? 'added' : 'removed'}`);
+
+      // Parent (usePhotos) handles updating the photos state
+      // We just need to sync our local state
+      setLocalPhotos(photos); // This will trigger re-render with updated reactions
+
+      return wasAdded;
+    } catch (error) {
+      console.error('❌ Failed to react in PhotoStories:', error);
+      return false;
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -204,8 +207,8 @@ handleReact('heart', currentCount + 1);
                     index < currentIndex
                       ? '100%'
                       : index === currentIndex
-                      ? `${progress}%`
-                      : '0%',
+                        ? `${progress}%`
+                        : '0%',
                 },
               ]}
             />
@@ -230,7 +233,7 @@ handleReact('heart', currentCount + 1);
               style={styles.image}
               resizeMode="contain"
             />
-            
+
             {/* Double-tap heart animation */}
             {showHeartAnimation && (
               <Animated.View
@@ -281,11 +284,12 @@ handleReact('heart', currentCount + 1);
         </View>
       </View>
 
-      {/* Reactions */}
+      {/* FIXED: Reactions now properly pass hasUserReacted callback */}
       <View style={styles.footer}>
         <ReactionBar
           photoId={currentPhoto.id}
           reactions={currentPhoto.reactions}
+          hasUserReacted={(reaction) => hasUserReacted(currentPhoto.id, reaction)}
           onReact={handleReact}
         />
       </View>

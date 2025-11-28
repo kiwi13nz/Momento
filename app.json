@@ -1,0 +1,42 @@
+{
+    "expo": {
+        "name": "Flick App",
+        "slug": "flick-app",
+        "version": "1.0.0",
+        "orientation": "portrait",
+        "icon": "./assets/icon.png",
+        "splash": {
+            "image": "./assets/splash.png",
+            "resizeMode": "contain",
+            "backgroundColor": "#000000"
+        },
+        "ios": {
+            "bundleIdentifier": "com.yourname.flick",
+            "supportsTablet": false,
+            "infoPlist": {
+                "NSCameraUsageDescription": "This app uses the camera to take photos.",
+                "NSPhotoLibraryUsageDescription": "This app needs access to your photos."
+            }
+        },
+        "android": {
+            "package": "com.yourname.flick",
+            "versionCode": 1,
+            "permissions": [
+                "CAMERA",
+                "READ_EXTERNAL_STORAGE",
+                "WRITE_EXTERNAL_STORAGE"
+            ]
+        },
+        "plugins": [
+            "expo-camera",
+            "expo-image-manipulator",
+            "expo-image-picker",
+            "expo-notifications"
+        ],
+        "extra": {
+            "eas": {
+                "projectId": "GENERATED_BY_EXPO"
+            }
+        }
+    }
+}

@@ -1,3 +1,4 @@
+// app/create-event.tsx
 import React, { useState } from 'react';
 import {
   View,
@@ -20,10 +21,11 @@ import { saveOwnerEvent } from '@/lib/storage';
 import { RouteErrorBoundary } from '@/components/shared/RouteErrorBoundary';
 import { AnalyticsService, Events } from '@/services/analytics';
 import { EventCreatedModal } from '@/components/shared/EventCreatedModal';
+import { ConfirmEventModal } from '@/components/shared/ConfirmEventModal';
+import { AuthService } from '@/services/auth';
 
-// Helper function for generating codes
 function generateEventCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude confusing chars
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
   for (let i = 0; i < 6; i++) {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -45,6 +47,8 @@ export default function CreateEventScreen() {
     title: string;
     ownerId: string;
   } | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [validTasksCount, setValidTasksCount] = useState(0);
 
   const addTask = () => {
     if (tasks.length >= 10) {
@@ -88,13 +92,42 @@ export default function CreateEventScreen() {
   };
 
   const createEvent = async () => {
-    if (!validateInputs()) return;
+    console.log('🎯 Create Event clicked');
 
+    if (!validateInputs()) {
+      console.log('❌ Validation failed');
+      return;
+    }
+
+    const validTasks = tasks.filter((t) => t.trim().length > 0);
+    const emptyCount = tasks.length - validTasks.length;
+
+    console.log(`📊 Valid tasks: ${validTasks.length}, Empty: ${emptyCount}`);
+
+    // Show confirmation modal if user has incomplete challenges
+    if (emptyCount > 0) {
+      setValidTasksCount(validTasks.length);
+      setShowConfirmModal(true);
+      return;
+    }
+
+    // All challenges filled, proceed directly
+    proceedWithCreation();
+  };
+
+  const proceedWithCreation = async () => {
+    console.log('✅ Proceeding with event creation');
+    setShowConfirmModal(false);
     setLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
     try {
-      // Generate unique code
+      // Ensure user is authenticated (anonymous auth)
+      const isAuth = await AuthService.isAuthenticated();
+      if (!isAuth) {
+        console.log('🔐 No auth session, creating anonymous session...');
+        await AuthService.signInAnonymously();
+      }
       let eventCode = generateEventCode();
       let codeExists = true;
       let attempts = 0;
@@ -104,7 +137,7 @@ export default function CreateEventScreen() {
           .from('events')
           .select('id')
           .eq('code', eventCode)
-          .single();
+          .maybeSingle();
 
         codeExists = !!data;
         if (codeExists) {
@@ -117,10 +150,8 @@ export default function CreateEventScreen() {
         throw new Error('Failed to generate unique code');
       }
 
-      // Generate owner ID
       const ownerId = `owner_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-      // Create event
       const { data: event, error: eventError } = await supabase
         .from('events')
         .insert({
@@ -134,7 +165,6 @@ export default function CreateEventScreen() {
 
       if (eventError) throw eventError;
 
-      // Create tasks
       const validTasks = tasks.filter((t) => t.trim().length > 0);
       const taskInserts = validTasks.map((description, index) => ({
         event_id: event.id,
@@ -148,7 +178,6 @@ export default function CreateEventScreen() {
 
       if (tasksError) throw tasksError;
 
-      // Save to local storage
       await saveOwnerEvent({
         eventId: event.id,
         eventCode: event.code,
@@ -157,7 +186,6 @@ export default function CreateEventScreen() {
         createdAt: new Date().toISOString(),
       });
 
-      // Track event creation
       AnalyticsService.trackEvent(Events.USER_CREATED_EVENT, {
         eventId: event.id,
         eventTitle: event.title,
@@ -166,7 +194,6 @@ export default function CreateEventScreen() {
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      // Show success modal instead of navigating immediately
       setCreatedEvent({
         id: event.id,
         code: event.code,
@@ -176,10 +203,16 @@ export default function CreateEventScreen() {
       setShowSuccessModal(true);
     } catch (error) {
       console.error('Create event failed:', error);
-      Alert.alert('Error', 'Failed to create event. Please try again.');
+
+      // FIXED: Web-compatible error alert
+      if (Platform.OS === 'web') {
+        window.alert('Failed to create event. Please try again.');
+      } else {
+        Alert.alert('Error', 'Failed to create event. Please try again.');
+      }
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
 
-      // Log error to analytics
       AnalyticsService.logError(error as Error, {
         context: 'create_event',
         title: title.trim(),
@@ -200,21 +233,18 @@ export default function CreateEventScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
               <ArrowLeft size={24} color={colors.text} />
             </TouchableOpacity>
           </View>
 
-          {/* Hero */}
           <View style={styles.hero}>
             <Sparkles size={40} color={colors.primary} />
             <Text style={styles.title}>Create Event</Text>
             <Text style={styles.subtitle}>Set up your photo challenge 📸</Text>
           </View>
 
-          {/* Form */}
           <View style={styles.form}>
             <Input
               label="Event Name"
@@ -237,7 +267,6 @@ export default function CreateEventScreen() {
               style={styles.textArea}
             />
 
-            {/* Tasks Section */}
             <View style={styles.tasksSection}>
               <Text style={styles.sectionTitle}>Photo Challenges</Text>
               <Text style={styles.sectionSubtitle}>
@@ -274,7 +303,6 @@ export default function CreateEventScreen() {
               )}
             </View>
 
-            {/* Actions */}
             <View style={styles.actions}>
               <Button
                 onPress={createEvent}
@@ -299,7 +327,6 @@ export default function CreateEventScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Success Modal */}
       {createdEvent && (
         <EventCreatedModal
           visible={showSuccessModal}
@@ -319,6 +346,15 @@ export default function CreateEventScreen() {
           }}
         />
       )}
+
+      {/* Confirm Modal */}
+      <ConfirmEventModal
+        visible={showConfirmModal}
+        validTasksCount={validTasksCount}
+        totalTasksCount={tasks.length}
+        onConfirm={proceedWithCreation}
+        onCancel={() => setShowConfirmModal(false)}
+      />
     </RouteErrorBoundary>
   );
 }

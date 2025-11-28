@@ -9,14 +9,20 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { PhotoService, StorageService, TaskService, EventService } from '@/services/api';
+import { PhotoService, StorageService, TaskService, EventService, PlayerService, supabase } from '@/services/api';
+import { ImageCompressionService } from '@/services/image-compression';
 import { useSession } from '@/hooks/useSession';
 import { RateLimiter } from '@/services/rate-limiter';
+import { ConfettiCelebration, isFirstUpload, markFirstUploadComplete } from '@/components/shared/ConfettiCelebration';
+import { ShareToStoryModal } from '@/components/shared/ShareToStoryModal';
+import { CheckCircle2, Camera } from 'lucide-react-native';
+import { colors, spacing, typography, borderRadius } from '@/lib/design-tokens';  // ← ADD THIS
 import type { Task } from '@/types';
 
 // Rate limiter: 5 uploads per minute
@@ -32,18 +38,54 @@ export default function UploadScreen() {
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [eventClosed, setEventClosed] = useState(false);
+  const [completedTaskIds, setCompletedTaskIds] = useState<string[]>([]);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [uploadedPhotoUrl, setUploadedPhotoUrl] = useState<string>('');
+  const [eventTitle, setEventTitle] = useState<string>('');
+  const [eventCode, setEventCode] = useState<string>('');
 
   useEffect(() => {
-    if (eventId) {
+    if (eventId && session) {
       loadTasks();
       checkEventStatus();
+      loadEventDetails();
     }
-  }, [eventId]);
+  }, [eventId, session]);
+
+  const loadEventDetails = async () => {
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      const { data: event } = await supabase
+        .from('events')
+        .select('title, code')
+        .eq('id', eventId!)
+        .single();
+
+      if (event) {
+        setEventTitle(event.title);
+        setEventCode(event.code);
+      }
+    } catch (error) {
+      console.error('Failed to load event details:', error);
+    }
+  };
 
   const loadTasks = async () => {
     try {
       const data = await TaskService.getByEventId(eventId!);
       setTasks(data);
+
+      // Load completed tasks AFTER tasks are loaded
+      if (session && data.length > 0) {
+        const submissions = await PhotoService.getPlayerSubmissions(
+          session.playerId,
+          data.map(t => t.id)
+        );
+        const completedIds = submissions.map(s => s.task_id);
+        setCompletedTaskIds(completedIds);
+        console.log('✅ Completed tasks:', completedIds);
+      }
     } catch (error) {
       console.error('Failed to load tasks:', error);
       Alert.alert('Error', 'Failed to load challenges');
@@ -67,22 +109,36 @@ export default function UploadScreen() {
       return;
     }
 
-    // Request permissions
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'We need camera roll permissions to upload photos.');
-      return;
-    }
+    try {
+      console.log('📸 Opening image picker...');
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.8,
-    });
+      // Request permissions (only needed on native)
+      if (Platform.OS !== 'web') {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Denied', 'We need camera roll permissions to upload photos.');
+          return;
+        }
+      }
 
-    if (!result.canceled && result.assets[0]) {
-      setSelectedImage(result.assets[0].uri);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      console.log('📸 Image picker result:', result);
+
+      if (!result.canceled && result.assets[0]) {
+        console.log('✅ Image selected:', result.assets[0].uri);
+        setSelectedImage(result.assets[0].uri);
+      } else {
+        console.log('❌ Image picker cancelled');
+      }
+    } catch (error) {
+      console.error('❌ Image picker error:', error);
+      Alert.alert('Error', 'Failed to open image picker. Please try again.');
     }
   };
 
@@ -92,21 +148,31 @@ export default function UploadScreen() {
       return;
     }
 
-    // Request permissions
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'We need camera permissions to take photos.');
+    // Camera not supported on web
+    if (Platform.OS === 'web') {
+      Alert.alert('Not Supported', 'Camera is not supported on web. Please use "Choose from Library".');
       return;
     }
 
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.8,
-    });
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'We need camera permissions to take photos.');
+        return;
+      }
 
-    if (!result.canceled && result.assets[0]) {
-      setSelectedImage(result.assets[0].uri);
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setSelectedImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Camera error:', error);
+      Alert.alert('Error', 'Failed to open camera. Please try again.');
     }
   };
 
@@ -146,7 +212,7 @@ export default function UploadScreen() {
           'Replace Photo?',
           'You already uploaded a photo for this challenge. Do you want to replace it?',
           [
-            { text: 'Cancel', style: 'cancel' },
+            { text: 'Cancel', style: 'cancel', onPress: () => setUploading(false) },
             {
               text: 'Replace',
               style: 'destructive',
@@ -179,31 +245,68 @@ export default function UploadScreen() {
     if (!selectedImage || !selectedTaskId || !session) return;
 
     try {
-      // Upload to storage
+      console.log('📤 Starting upload process...');
+
+      // NEW: Ensure player has auth_user_id linked
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: player } = await supabase
+          .from('players')
+          .select('auth_user_id')
+          .eq('id', session.playerId)
+          .single();
+
+        // If player doesn't have auth_user_id, link it now
+        if (player && !player.auth_user_id) {
+          console.log('🔗 Linking auth user to player...');
+          await supabase
+            .from('players')
+            .update({ auth_user_id: user.id })
+            .eq('id', session.playerId);
+        }
+      }
+
+      let imageToUpload = selectedImage;
+
+      // STEP 1: Compress image (skip on web if causing issues)
+      console.log('🗜️ Compressing image...');
+      imageToUpload = await ImageCompressionService.compressImage(selectedImage);
+      console.log('🔍 Compressed image URI:', imageToUpload); // ADD THIS
+      console.log('🔍 Is blob URL?', imageToUpload.startsWith('blob:')); // ADD THIS
+
+
+      // STEP 2: Upload to storage
+      console.log('☁️ Uploading to storage...');
       const photoUrl = await StorageService.uploadPhoto(
         eventId!,
         session.playerId,
-        selectedImage
+        imageToUpload
       );
 
-      // Create submission
+      // STEP 3: Create submission
+      console.log('💾 Creating submission record...');
       await PhotoService.upload(selectedTaskId, session.playerId, photoUrl);
 
-      Alert.alert('Success! 🎉', 'Your photo has been uploaded', [
-        {
-          text: 'OK',
-          onPress: () => router.back(),
-        },
-      ]);
+      console.log('✅ Upload complete!');
+
+      // Show celebration and share modal
+      const isFirst = await isFirstUpload();
+      if (isFirst) {
+        setShowCelebration(true);
+        setUploadedPhotoUrl(photoUrl);
+        await markFirstUploadComplete();
+      } else {
+        setUploadedPhotoUrl(photoUrl);
+        setShowShareModal(true);
+      }
     } catch (error) {
+      console.error('❌ Upload failed:', error);
       throw error; // Re-throw to be caught by handleUpload
     }
   };
 
   const getTaskCompletionStatus = (taskId: string) => {
-    // This would need to check if player has already submitted for this task
-    // For now, just return false - you can enhance this later
-    return false;
+    return completedTaskIds.includes(taskId);
   };
 
   if (loading) {
@@ -221,7 +324,7 @@ export default function UploadScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#007AFF" />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Upload Photo</Text>
         <View style={{ width: 40 }} />
@@ -240,28 +343,37 @@ export default function UploadScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>1. Select a Challenge</Text>
           <View style={styles.taskList}>
-            {tasks.map((task) => {
+            {tasks.map((task, index) => {
               const isSelected = selectedTaskId === task.id;
               const isCompleted = getTaskCompletionStatus(task.id);
+
               return (
                 <TouchableOpacity
                   key={task.id}
                   style={[
                     styles.taskCard,
                     isSelected && styles.taskCardSelected,
+                    isCompleted && styles.taskCardCompleted,
                     eventClosed && styles.taskCardDisabled,
                   ]}
-                  onPress={() => !eventClosed && setSelectedTaskId(task.id)}
-                  disabled={eventClosed}
+                  onPress={() => !eventClosed && !isCompleted && setSelectedTaskId(task.id)}
+                  disabled={eventClosed || isCompleted}
                 >
-                  <View style={styles.taskContent}>
-                    <Text style={[styles.taskText, isSelected && styles.taskTextSelected]}>
-                      {task.description}
-                    </Text>
-                    {isCompleted && (
-                      <Ionicons name="checkmark-circle" size={20} color="#34C759" />
+                  <View style={styles.taskNumber}>
+                    {isCompleted ? (
+                      <CheckCircle2 size={20} color="#34C759" />
+                    ) : (
+                      <Text style={styles.taskNumberText}>#{index + 1}</Text>
                     )}
                   </View>
+                  <Text style={[
+                    styles.taskDescription,
+                    isCompleted && styles.taskDescriptionCompleted,
+                    isSelected && styles.taskDescriptionSelected
+                  ]}>
+                    {task.description}
+                  </Text>
+                  {!isCompleted && <Camera size={20} color={isSelected ? '#007AFF' : '#8E8E93'} />}
                 </TouchableOpacity>
               );
             })}
@@ -284,22 +396,24 @@ export default function UploadScreen() {
             </View>
           ) : (
             <View style={styles.photoButtons}>
+              {Platform.OS !== 'web' && (
+                <TouchableOpacity
+                  style={[styles.photoButton, eventClosed && styles.buttonDisabled]}
+                  onPress={takePhoto}
+                  disabled={eventClosed}
+                >
+                  <Ionicons name="camera" size={32} color={eventClosed ? '#999' : colors.primary} />
+                  <Text style={[styles.photoButtonText, eventClosed && styles.buttonTextDisabled]}>
+                    Take Photo
+                  </Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
-                style={[styles.photoButton, eventClosed && styles.buttonDisabled]}
-                onPress={takePhoto}
-                disabled={eventClosed}
-              >
-                <Ionicons name="camera" size={32} color={eventClosed ? '#999' : '#007AFF'} />
-                <Text style={[styles.photoButtonText, eventClosed && styles.buttonTextDisabled]}>
-                  Take Photo
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.photoButton, eventClosed && styles.buttonDisabled]}
+                style={[styles.photoButton, eventClosed && styles.buttonDisabled, Platform.OS === 'web' && styles.photoButtonFullWidth]}
                 onPress={pickImage}
                 disabled={eventClosed}
               >
-                <Ionicons name="images" size={32} color={eventClosed ? '#999' : '#007AFF'} />
+                <Ionicons name="images" size={32} color={eventClosed ? '#999' : colors.primary} />
                 <Text style={[styles.photoButtonText, eventClosed && styles.buttonTextDisabled]}>
                   Choose from Library
                 </Text>
@@ -321,7 +435,10 @@ export default function UploadScreen() {
           disabled={!selectedImage || !selectedTaskId || uploading || eventClosed}
         >
           {uploading ? (
-            <ActivityIndicator color="#fff" />
+            <>
+              <ActivityIndicator color="#fff" />
+              <Text style={styles.uploadButtonText}>Uploading...</Text>
+            </>
           ) : (
             <>
               <Ionicons name="cloud-upload" size={24} color="#fff" />
@@ -332,6 +449,28 @@ export default function UploadScreen() {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Celebration Modal */}
+      <ConfettiCelebration
+        visible={showCelebration}
+        playerName={session?.playerName}
+        onComplete={() => {
+          setShowCelebration(false);
+          setShowShareModal(true);
+        }}
+      />
+
+      {/* Share Modal */}
+      <ShareToStoryModal
+        visible={showShareModal}
+        photoUrl={uploadedPhotoUrl}
+        eventCode={eventCode}
+        eventTitle={eventTitle}
+        onClose={() => {
+          setShowShareModal(false);
+          router.back();
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -339,7 +478,7 @@ export default function UploadScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,  // Dark background
   },
   loadingContainer: {
     flex: 1,
@@ -350,20 +489,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.m,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    borderBottomColor: colors.surfaceLight,
   },
   backButton: {
     padding: 8,
   },
   headerTitle: {
-    fontSize: 17,
-    fontWeight: '600',
+    ...typography.bodyBold,
+    color: colors.text,
   },
   closedBanner: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: colors.error,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -371,55 +510,74 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   closedBannerText: {
+    ...typography.bodyBold,
     color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
   },
   content: {
     flex: 1,
   },
   contentContainer: {
-    padding: 16,
+    padding: spacing.m,
   },
   section: {
-    marginBottom: 32,
+    marginBottom: spacing.xl,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 16,
-    color: '#000',
+    ...typography.headline,
+    color: colors.text,
+    marginBottom: spacing.m,
   },
   taskList: {
     gap: 12,
   },
   taskCard: {
-    backgroundColor: '#F2F2F7',
-    borderRadius: 12,
-    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.surface,  // Dark surface
+    borderRadius: borderRadius.m,
+    padding: spacing.m,
     borderWidth: 2,
     borderColor: 'transparent',
   },
   taskCardSelected: {
-    backgroundColor: '#E3F2FD',
-    borderColor: '#007AFF',
+    backgroundColor: colors.surfaceLight,
+    borderColor: colors.primary,  // Orange border
+  },
+  taskCardCompleted: {
+    backgroundColor: colors.surface,
+    opacity: 0.5,
   },
   taskCardDisabled: {
     opacity: 0.5,
   },
-  taskContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  taskNumber: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.backgroundLight,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.primary,  // Orange border
   },
-  taskText: {
-    fontSize: 16,
-    color: '#000',
+  taskNumberText: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.primary,  // Orange text
+  },
+  taskDescription: {
+    ...typography.body,
+    color: colors.text,
     flex: 1,
   },
-  taskTextSelected: {
+  taskDescriptionCompleted: {
+    color: colors.textTertiary,
+    textDecorationLine: 'line-through',
+  },
+  taskDescriptionSelected: {
     fontWeight: '600',
-    color: '#007AFF',
+    color: colors.primary,  // Orange when selected
   },
   photoButtons: {
     flexDirection: 'row',
@@ -427,61 +585,63 @@ const styles = StyleSheet.create({
   },
   photoButton: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
-    borderRadius: 12,
-    padding: 24,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.m,
+    padding: spacing.l,
     alignItems: 'center',
     gap: 8,
   },
+  photoButtonFullWidth: {
+    flex: 1,
+  },
   photoButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#007AFF',
+    ...typography.bodyBold,
+    color: colors.primary,  // Orange text
   },
   buttonDisabled: {
-    backgroundColor: '#F2F2F7',
+    backgroundColor: colors.surface,
     opacity: 0.5,
   },
   buttonTextDisabled: {
-    color: '#999',
+    color: colors.textTertiary,
   },
   imagePreviewContainer: {
     position: 'relative',
-    borderRadius: 12,
+    borderRadius: borderRadius.m,
     overflow: 'hidden',
   },
   imagePreview: {
     width: '100%',
     aspectRatio: 4 / 3,
-    borderRadius: 12,
+    borderRadius: borderRadius.m,
   },
   removeImageButton: {
     position: 'absolute',
     top: 12,
     right: 12,
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
     borderRadius: 16,
   },
   footer: {
-    padding: 16,
+    padding: spacing.m,
     borderTopWidth: 1,
-    borderTopColor: '#E5E5EA',
+    borderTopColor: colors.surfaceLight,
   },
   uploadButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: colors.primary,  // Orange button
+    borderRadius: borderRadius.m,
+    padding: spacing.m,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   uploadButtonDisabled: {
-    backgroundColor: '#C7C7CC',
+    backgroundColor: colors.surfaceLight,
+    opacity: 0.5,
   },
   uploadButtonText: {
+    ...typography.bodyBold,
     color: '#fff',
-    fontSize: 17,
-    fontWeight: '600',
   },
 });
